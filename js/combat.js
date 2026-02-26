@@ -11,8 +11,9 @@ function getTalentSquadBonus()   { return playerData.talents.squad || 0; }
 // ============================================================
 function fireWeapon() {
     const g = game;
-    switch (g.weapon) {
-        case 'invincibility': return; // 无敌状态不开枪，保持护盾效果
+    // 无敌状态下仍然使用手枪射击
+    const effectiveWeapon = g.weapon === 'invincibility' ? 'pistol' : g.weapon;
+    switch (effectiveWeapon) {
         case 'pistol': {
             const squad = g.squadCount;
             // More squad = more bullets (up to 8) + higher damage per bullet
@@ -136,7 +137,15 @@ function explodeBarrel(br) {
                 g.deadBodies.push({ x: e.x, z: e.z, timer: 300 });
                 g.comboCount++; g.comboTimer = CONFIG.COMBO_TIMEOUT;
                 g.bestCombo = Math.max(g.bestCombo, g.comboCount);
-                if (e.isBoss) { spawnBossCoins(e.x, e.z); if (e.isMegaBoss) spawnBossCoins(e.x, e.z); }
+                if (e.isBoss) {
+                    spawnBossCoins(e.x, e.z);
+                    if (e.isMegaBoss) spawnBossCoins(e.x, e.z);
+                    const stillBossAlive = g.enemies.some(o => o !== e && o.alive && o.isBoss);
+                    if (!stillBossAlive) {
+                        g.enemyBullets = [];
+                        if (e.isMegaBoss) g.midShopTimer = 90;
+                    }
+                }
             }
         }
     });

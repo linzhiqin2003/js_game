@@ -58,6 +58,11 @@ function createGame() {
         gemsCollected: 0,
         // Mega boss tracking
         megaBossWarningShown: false,
+        // Mid-game shop (after mega boss kill)
+        midShopOpen: false,
+        midShopTimer: 0,  // countdown frames before opening shop
+        midShopBought: [], // indices of items bought this opening
+        midShopCount: 0,   // how many times mid-shop has opened (for price scaling)
         // Skill weapon (shop-purchased, manual activation via Space key)
         skillWeapon: null,      // weapon key from SHOP_WEAPONS (set at game start if equipped)
         skillCooldown: 0,       // ms remaining before skill can be used again

@@ -54,7 +54,8 @@ function update(dt) {
 
     // Auto-shoot
     g.shootTimer -= dt;
-    const fireInterval = (g.weapon === 'pistol' ? 90 : CONFIG.SHOOT_INTERVAL * WEAPON_DEFS[g.weapon].fireRateMult) * getTalentFireRateMult();
+    const fireWeapon_ = g.weapon === 'invincibility' ? 'pistol' : g.weapon;
+    const fireInterval = (fireWeapon_ === 'pistol' ? 90 : CONFIG.SHOOT_INTERVAL * WEAPON_DEFS[fireWeapon_].fireRateMult) * getTalentFireRateMult();
     if (g.shootTimer <= 0) { g.shootTimer = fireInterval; fireWeapon(); }
 
     // Bullets
@@ -81,6 +82,10 @@ function update(dt) {
     if (g.bullets.length > bulletLimit) g.bullets.splice(0, g.bullets.length - Math.floor(bulletLimit * 0.7));
 
     // Bullet-enemy collision
+    // Miss chance: scales with squad size — large armies are less accurate
+    // squad<=30: 0%, 60: 3%, 100: 7%, 150: 12%, 200: 17%, 300+: 25%
+    const missChance = g.squadCount <= 30 ? 0
+        : Math.min(0.25, (g.squadCount - 30) * 0.001);
     g.bullets.forEach(b => {
         if (b.dead) return;
         for (let e of g.enemies) {
@@ -89,6 +94,15 @@ function update(dt) {
             const dx = Math.abs(b.x - e.x), dz = Math.abs(b.z - e.z);
             const hitX = b.weapon === 'rocket' ? 28 : 22, hitZ = b.weapon === 'rocket' ? 20 : 16;
             if (dx < hitX && dz < hitZ) {
+                // Miss roll (rockets and laser never miss)
+                if (b.weapon !== 'rocket' && !b.pierce && missChance > 0 && Math.random() < missChance) {
+                    // Ricochet: deflect bullet sideways, bullet survives
+                    b.vx += (Math.random() - 0.5) * 6;
+                    addDamageNumber(e.x + (Math.random() - 0.5) * 20, e.z, 'MISS', 0x888888);
+                    addParticles(e.x, e.z, 2, 0xaaaaaa, 3, 8);
+                    b.dead = true; // miss consumes the bullet
+                    break;
+                }
                 e.hp -= (b.damage || 1);
                 e.hitFlash = 4;
                 playSound('hit');
@@ -119,7 +133,10 @@ function update(dt) {
                             spawnBossCoins(other.x, other.z); spawnBossGems(other.x, other.z);
                             if (other.isMegaBoss) spawnBossCoins(other.x, other.z); // mega boss double coins
                             const stillBossAlive = g.enemies.some(o => o !== other && o.alive && o.isBoss);
-                            if (!stillBossAlive) g.enemyBullets = [];
+                            if (!stillBossAlive) {
+                                g.enemyBullets = [];
+                                if (other.isMegaBoss) g.midShopTimer = 90;
+                            }
                         }
                             }
                         }
@@ -151,7 +168,10 @@ function update(dt) {
                         spawnBossCoins(e.x, e.z); // double coins
                         spawnBossGems(e.x, e.z);
                         const otherBossAlive = g.enemies.some(o => o !== e && o.alive && o.isBoss);
-                        if (!otherBossAlive) g.enemyBullets = [];
+                        if (!otherBossAlive) {
+                            g.enemyBullets = [];
+                            g.midShopTimer = 90; // open shop after effects
+                        }
                     } else if (e.isBoss) {
                         // Boss death: big explosion + extra particles + strong shake
                         addExplosion(e.x + 20, e.z + 15);
@@ -895,6 +915,14 @@ function update(dt) {
     // Vignette flash decay
     g.vignetteFlash = Math.max(0, g.vignetteFlash - 0.03);
     g.screenFlash = Math.max(0, g.screenFlash - 0.05);
+
+    // Mid-game shop timer (after mega boss kill)
+    if (g.midShopTimer > 0) {
+        g.midShopTimer--;
+        if (g.midShopTimer <= 0) {
+            openMidShop();
+        }
+    }
 
     // Clouds
     g.clouds.forEach(c => {

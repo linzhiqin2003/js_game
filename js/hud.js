@@ -110,7 +110,7 @@ function drawBossHud() {
     const miniBarH = bossCount > 1 ? 7 : 0;
     const miniBarGap = bossCount > 1 ? 5 : 0;
     const barX = screenW / 2 - barW / 2;
-    const topY = 40;
+    const topY = 60;
     const barY = topY + 20;
     const boxPad = 10;
     const boxX = barX - boxPad;

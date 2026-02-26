@@ -21,7 +21,7 @@ There are no tests, linters, or build steps.
 ### Module Load Order (strict — defined in index.html)
 
 ```
-config.js → globals.js → audio.js → core.js → spawn.js → combat.js → draw.js → hud.js → update.js → render.js → main.js
+config.js → globals.js → audio.js → core.js → spawn.js → combat.js → draw.js → hud.js → update.js → render.js → shop.js → main.js
 ```
 
 All modules share a single global scope. Later modules depend on functions/variables from earlier ones. **Order matters** — moving a script tag will break things.
@@ -40,7 +40,8 @@ All modules share a single global scope. Later modules depend on functions/varia
 | `hud.js` | HUD updates: score/squad/wave/coin text, weapon timer bar, boss HP bar, wave banner, combo counter, damage popups |
 | `update.js` | Main game tick: input processing, bullet/enemy/coin physics, collision detection, gate interaction, spawning triggers, effect timers |
 | `render.js` | Frame orchestrator: clears graphics, builds depth-sorted render list, calls draw functions in correct layer order |
-| `main.js` | PixiJS app init, sprite loading, UI layer setup, input handlers, shop system (buy/equip/render), game start/over/menu flow, game loop ticker |
+| `shop.js` | Shop system: buy/equip weapons, talents, armor; mid-game shop (补给站); all shop render functions and event bindings |
+| `main.js` | PixiJS app init, sprite loading, UI layer setup, input handlers, game start/over/menu flow, game loop ticker |
 
 ### Key Architectural Patterns
 

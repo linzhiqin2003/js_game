@@ -489,18 +489,18 @@ html, body {
 }
 
 /* ============================================================
-   WEAPON SLOTS (bottom-left, shown during gameplay)
+   WEAPON SLOTS (top-left, horizontal row, shown during gameplay)
    ============================================================ */
 #weaponSlots {
     position: fixed;
-    bottom: 20px;
+    top: 16px;
     left: 16px;
     display: flex;
-    flex-direction: column;
-    gap: 7px;
+    flex-direction: row;
+    gap: 6px;
     z-index: 5;
     pointer-events: auto;
-    padding: 8px;
+    padding: 7px;
     background: rgba(8,8,20,0.72);
     border-radius: 14px;
     border: 1px solid rgba(255,255,255,0.07);
@@ -511,16 +511,17 @@ html, body {
 
 .wslot {
     position: relative;
-    width: min(190px, 42vw);
-    height: min(46px, 11vw);
+    width: min(72px, 15vw);
+    height: min(72px, 15vw);
     border-radius: 9px;
     border: 1.5px solid rgba(255,255,255,0.12);
     background: rgba(255,255,255,0.04);
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     align-items: center;
-    gap: min(10px, 2.2vw);
-    padding: 0 min(10px, 2.2vw);
+    justify-content: center;
+    gap: 2px;
+    padding: 6px 4px 4px;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     transition: border-color 0.2s, background 0.2s, box-shadow 0.2s, opacity 0.2s;
@@ -531,26 +532,24 @@ html, body {
 /* Key badge */
 .wslot-key {
     font-family: 'Courier New', monospace;
-    font-size: min(11px, 2.4vw);
+    font-size: min(10px, 2vw);
     font-weight: bold;
     color: rgba(255,255,255,0.3);
-    flex-shrink: 0;
-    width: min(22px, 5vw);
+    line-height: 1;
     text-align: center;
 }
 
 .wslot-icon {
-    font-size: min(22px, 5vw);
+    font-size: min(26px, 5.5vw);
     line-height: 1;
-    flex-shrink: 0;
 }
 
 .wslot-count {
     font-family: 'Courier New', monospace;
-    font-size: min(13px, 3vw);
+    font-size: min(12px, 2.5vw);
     font-weight: bold;
     line-height: 1;
-    flex: 1;
+    text-align: center;
     transition: color 0.2s;
 }
 
@@ -606,31 +605,153 @@ html, body {
 }
 
 /* ============================================================
+   MID-GAME SHOP (after mega boss)
+   ============================================================ */
+#midShopOverlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: rgba(0,0,0,0.82);
+    z-index: 15;
+    transition: opacity 0.3s;
+}
+#midShopOverlay.hidden { opacity: 0; pointer-events: none; }
+
+#midShopPanel {
+    width: min(420px, 88vw);
+    padding: min(28px, 5vw);
+    background: linear-gradient(180deg, #1a1020, #0a0a18);
+    border: 2px solid #ff6600;
+    border-radius: 16px;
+    box-shadow: 0 0 50px rgba(255,100,0,0.25), inset 0 1px 0 rgba(255,255,255,0.05);
+    text-align: center;
+}
+
+#midShopTitle {
+    font-size: min(32px, 6vw);
+    font-weight: bold;
+    color: #ff8833;
+    letter-spacing: 3px;
+    margin-bottom: 6px;
+    text-shadow: 0 0 20px rgba(255,120,0,0.5);
+}
+
+#midShopSubtitle {
+    font-size: min(14px, 3vw);
+    color: #aaa;
+    margin-bottom: min(18px, 3vh);
+}
+
+#midShopStats {
+    display: flex;
+    justify-content: center;
+    gap: min(30px, 6vw);
+    margin-bottom: min(18px, 3vh);
+    font-size: min(16px, 3.5vw);
+    font-weight: bold;
+}
+
+#midShopItems {
+    display: flex;
+    flex-direction: column;
+    gap: min(10px, 2vw);
+    margin-bottom: min(20px, 3vh);
+}
+
+.midshop-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: min(12px, 2.5vw) min(16px, 3vw);
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    transition: background 0.15s, border-color 0.15s;
+}
+.midshop-item:hover {
+    background: rgba(255,136,0,0.08);
+    border-color: rgba(255,136,0,0.3);
+}
+
+.midshop-item-info {
+    text-align: left;
+}
+.midshop-item-name {
+    font-size: min(16px, 3.5vw);
+    font-weight: bold;
+    color: #ffaa44;
+}
+.midshop-item-desc {
+    font-size: min(12px, 2.6vw);
+    color: #999;
+    margin-top: 2px;
+}
+
+.btn-midshop-buy {
+    padding: min(8px, 1.8vw) min(16px, 3.5vw);
+    font-size: min(14px, 3vw);
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    background: linear-gradient(180deg, #ff9933, #cc6600);
+    color: #1a0a00;
+    border: 2px solid #ffaa44;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.1s;
+    -webkit-tap-highlight-color: transparent;
+    white-space: nowrap;
+}
+.btn-midshop-buy:hover { transform: scale(1.05); }
+.btn-midshop-buy:active { transform: scale(0.95); }
+.btn-midshop-buy:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.midshop-bought {
+    opacity: 0.45;
+    border-color: rgba(100,200,100,0.3) !important;
+}
+.midshop-sold {
+    font-size: min(14px, 3vw);
+    font-weight: bold;
+    color: #66cc66;
+    letter-spacing: 1px;
+}
+
+.btn-midshop-go {
+    background: linear-gradient(180deg, #44cc44, #228822) !important;
+    border-color: #55dd55 !important;
+    color: #fff !important;
+    padding: min(16px, 3.5vw) min(50px, 10vw) !important;
+    font-size: min(22px, 4.5vw) !important;
+    letter-spacing: 2px;
+}
+
+/* ============================================================
    MOBILE PORTRAIT ADAPTATIONS (portrait phones)
    ============================================================ */
 @media screen and (max-width: 480px) {
-    /* 1. Weapon slots: horizontal row centered at bottom */
+    /* 1. Weapon slots: move to bottom-center on mobile */
     #weaponSlots {
-        flex-direction: row;
+        top: auto;
         left: 50%;
-        right: auto;
         bottom: 10px;
         transform: translateX(-50%);
         gap: 5px;
         padding: 5px 7px;
     }
     .wslot {
-        width: min(70px, 22vw);
-        height: min(64px, 16vw);
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        gap: 2px;
-        padding: 3px;
+        width: min(62px, 20vw);
+        height: min(62px, 20vw);
+        padding: 4px 3px 3px;
     }
     .wslot-key { display: none; } /* keyboard hint not needed on mobile */
-    .wslot-icon { font-size: min(24px, 6.5vw); }
-    .wslot-count { font-size: min(11px, 3vw); text-align: center; }
+    .wslot-icon { font-size: min(22px, 6vw); }
+    .wslot-count { font-size: min(11px, 3vw); }
 
     /* 2. Shop: full-width starting from top */
     #shopOverlay {

@@ -72,7 +72,11 @@ function spawnBoss(z) {
     const bulletDmg = 1 + Math.floor(g.squadCount / 6);
     const volleyDmg = bulletCount * bulletDmg;
     const af = getAdaptiveFactor();
-    const baseDmg = 1 + Math.floor(g.wave / 6);
+    // Boss damage scales with both wave AND squad size (percentage-based)
+    // Base: wave-scaling + 3~5% of squad per hit
+    const waveDmg = 1 + Math.floor(g.wave / 5);
+    const squadPctDmg = Math.ceil(g.squadCount * (0.03 + bossLevel * 0.005));
+    const baseDmg = waveDmg + squadPctDmg;
 
     // Shoot interval: each boss fires a bit slower to keep total fire rate manageable
     const baseInterval = Math.max(55, 160 - bossLevel * 15);
@@ -90,9 +94,9 @@ function spawnBoss(z) {
             bx = -xSpread / 2 + t * xSpread + (Math.random() - 0.5) * 18;
         }
         const bossHp = Math.max(20, Math.ceil(volleyDmg * (12 + bossLevel * 5) * statMult));
-        // 多boss时单个boss伤害+10%补偿
-        const multiBossDmgMult = bossCount > 1 ? 1.1 : 1.0;
-        const bossDmg = Math.max(1, Math.ceil(baseDmg * Math.sqrt(af) * statMult * multiBossDmgMult));
+        // 多boss时单个boss伤害略减但总DPS更高
+        const multiBossDmgMult = bossCount > 1 ? 0.85 : 1.0;
+        const bossDmg = Math.max(2, Math.ceil(baseDmg * Math.sqrt(af) * statMult * multiBossDmgMult));
         const zOffset = bossCount > 1 ? (Math.random() - 0.5) * 55 : 0;
 
         g.enemies.push({
@@ -119,13 +123,16 @@ function spawnMegaBoss(z) {
     const bulletCount = Math.min(g.squadCount, 8);
     const bulletDmg = 1 + Math.floor(g.squadCount / 6);
     const volleyDmg = bulletCount * bulletDmg;
-    const baseDmg = 2 + Math.floor(g.wave / 4); // higher base damage than regular boss
+    // Mega boss damage: wave-scaling + 5~8% of squad per hit (higher than regular boss)
+    const waveDmg = 2 + Math.floor(g.wave / 4);
+    const squadPctDmg = Math.ceil(g.squadCount * (0.05 + megaLevel * 0.01));
+    const baseDmg = waveDmg + squadPctDmg;
 
     // Much higher HP — scales with volley damage and mega level
     const megaHp = Math.max(60, Math.ceil(volleyDmg * (25 + megaLevel * 12)));
 
-    // Damage per shot — strong but fair
-    const megaDmg = Math.max(2, Math.ceil(baseDmg * Math.sqrt(af) * 1.3));
+    // Damage per shot — scales with squad so it stays threatening
+    const megaDmg = Math.max(3, Math.ceil(baseDmg * Math.sqrt(af) * 1.3));
 
     // Slower shoot interval but fires skill attacks between shots
     const shootInterval = Math.max(80, 180 - megaLevel * 12);
@@ -157,15 +164,21 @@ function generateTroopGateOption(wave, squad, idx, total) {
 
     // === 加法增益：前期加少，后期加多；小增益大概率，大增益小概率 ===
     const waveBonus = Math.floor(wave / 5); // 每5波基础值+1
-    // 小加: +1~3 + waveBonus, 高权重（常见）
-    pool.push({ op: '+', value: 1 + Math.floor(Math.random() * 3) + waveBonus, w: 5 });
-    // 中加: +4~6 + waveBonus, wave3+解锁, 中等权重
+    const lateBonus = wave >= 15 ? Math.floor((wave - 15) / 5) * 2 : 0; // 15波后额外加速
+    // 小加: +1~3 + waveBonus + lateBonus, 高权重（常见）
+    pool.push({ op: '+', value: 1 + Math.floor(Math.random() * 3) + waveBonus + lateBonus, w: 5 });
+    // 中加: +4~6 + waveBonus + lateBonus, wave3+解锁, 中等权重
     if (wave >= 3) {
-        pool.push({ op: '+', value: 4 + Math.floor(Math.random() * 3) + waveBonus, w: 2.5 });
+        pool.push({ op: '+', value: 4 + Math.floor(Math.random() * 3) + waveBonus + lateBonus, w: 2.5 });
     }
-    // 大加: +7~12 + waveBonus*2, wave8+解锁, 低权重（稀有）
+    // 大加: +7~12 + waveBonus*2 + lateBonus*2, wave8+解锁, 低权重（稀有）
     if (wave >= 8) {
-        pool.push({ op: '+', value: 7 + Math.floor(Math.random() * 6) + waveBonus * 2, w: 0.8 });
+        pool.push({ op: '+', value: 7 + Math.floor(Math.random() * 6) + waveBonus * 2 + lateBonus * 2, w: 0.8 });
+    }
+    // 超大加: wave20+解锁, 非常稀有
+    if (wave >= 20) {
+        const megaAdd = 15 + Math.floor(Math.random() * 10) + waveBonus * 3;
+        pool.push({ op: '+', value: megaAdd, w: 0.4 });
     }
 
     // === 减法惩罚：小减大概率，大减小概率 ===
@@ -186,11 +199,15 @@ function generateTroopGateOption(wave, squad, idx, total) {
         }
     } else {
         // 大队伍：百分比门，大百分比小概率
-        // 小百分比增益: +10~15%, 较常见
-        pool.push({ op: '+%', value: 10 + Math.floor(Math.random() * 6), w: 2.0 });
-        // 大百分比增益: +20~30%, wave8+, 稀有
+        // 小百分比增益: +10~20%, 较常见
+        pool.push({ op: '+%', value: 10 + Math.floor(Math.random() * 11), w: 2.0 });
+        // 大百分比增益: +25~40%, wave8+, 稀有
         if (wave >= 8) {
-            pool.push({ op: '+%', value: 20 + Math.floor(Math.random() * 11), w: 0.6 });
+            pool.push({ op: '+%', value: 25 + Math.floor(Math.random() * 16), w: 0.6 });
+        }
+        // 超大百分比增益: +40~60%, wave18+, 非常稀有
+        if (wave >= 18) {
+            pool.push({ op: '+%', value: 40 + Math.floor(Math.random() * 21), w: 0.3 });
         }
         // 百分比惩罚
         pool.push({ op: '-%', value: 10 + Math.floor(Math.random() * 6), w: 1.5 });
@@ -319,7 +336,7 @@ function spawnGate() {
         }
         // 保证至少一个好门；允许多个坏门同列出现
         const hasGood = troopOps.some(o => isGoodOption(o, g.squadCount));
-        if (!hasGood) troopOps[0] = { op: '+', value: 2 + Math.floor(g.wave / 4) };
+        if (!hasGood) troopOps[0] = { op: '+', value: 2 + Math.floor(g.wave / 3) + (g.wave >= 15 ? Math.floor((g.wave - 15) / 5) * 2 : 0) };
         for (let i = troopOps.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [troopOps[i], troopOps[j]] = [troopOps[j], troopOps[i]];
