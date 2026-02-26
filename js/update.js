@@ -31,12 +31,30 @@ function update(dt) {
     // Weapon timer
     if (g.weapon !== 'pistol' && g.weaponTimer > 0) {
         g.weaponTimer -= dt;
-        if (g.weaponTimer <= 0) { g.weapon = 'pistol'; g.weaponTimer = 0; }
+        if (g.weaponTimer <= 0) {
+            const expiredWeapon = g.weapon;
+            g.weapon = 'pistol'; g.weaponTimer = 0;
+            // Start shared cooldown when any shop weapon expires
+            if (SHOP_WEAPONS[expiredWeapon]) {
+                g.skillCooldown = SKILL_SHARED_COOLDOWN * 1000;
+                g.skillReady = false;
+            }
+        }
+    }
+
+    // Shared cooldown timer (applies to ALL weapons)
+    if (g.skillCooldown > 0) {
+        g.skillCooldown -= dt;
+        if (g.skillCooldown <= 0) {
+            g.skillCooldown = 0;
+            const hasCharges = Object.values(playerData.weaponCharges || {}).some(c => c > 0);
+            g.skillReady = hasCharges;
+        }
     }
 
     // Auto-shoot
     g.shootTimer -= dt;
-    const fireInterval = g.weapon === 'pistol' ? 90 : CONFIG.SHOOT_INTERVAL * WEAPON_DEFS[g.weapon].fireRateMult;
+    const fireInterval = (g.weapon === 'pistol' ? 90 : CONFIG.SHOOT_INTERVAL * WEAPON_DEFS[g.weapon].fireRateMult) * getTalentFireRateMult();
     if (g.shootTimer <= 0) { g.shootTimer = fireInterval; fireWeapon(); }
 
     // Bullets
@@ -59,7 +77,8 @@ function update(dt) {
         if (b.maxRange && b.z - b.startZ > b.maxRange) return false;
         return true;
     });
-    if (g.bullets.length > 300) g.bullets.splice(0, g.bullets.length - 200);
+    const bulletLimit = _proj.isMobile ? 120 : 300;
+    if (g.bullets.length > bulletLimit) g.bullets.splice(0, g.bullets.length - Math.floor(bulletLimit * 0.7));
 
     // Bullet-enemy collision
     g.bullets.forEach(b => {
@@ -96,6 +115,11 @@ function update(dt) {
                                 other.alive = false; g.score += ks; g.killCount++;
                                 addExplosion(other.x, other.z);
                                 g.deadBodies.push({ x: other.x, z: other.z, timer: 300 });
+                                if (other.isBoss) {
+                            spawnBossCoins(other.x, other.z); spawnBossGems(other.x, other.z);
+                            const stillBossAlive = g.enemies.some(o => o !== other && o.alive && o.isBoss);
+                            if (!stillBossAlive) g.enemyBullets = [];
+                        }
                             }
                         }
                     });
@@ -117,9 +141,13 @@ function update(dt) {
                         addParticles(e.x, e.z, 40, 0xcc66ff, 6, 35);
                         addParticles(e.x, e.z, 20, 0xffffff, 4, 25);
                         g.shakeTimer = 25; g.screenFlash = 0.6;
-                        // Clear boss's remaining bullets
-                        g.enemyBullets = [];
-                        addScorePopup(`BOSS +${killScore}!`, ep.x, ep.y - 30, 0xcc66ff);
+                        addScorePopup(`大奶龙 +${killScore}!`, ep.x, ep.y - 30, 0xcc66ff);
+                        // Drop coins + gems per boss
+                        spawnBossCoins(e.x, e.z);
+                        spawnBossGems(e.x, e.z);
+                        // Only clear bullets when the LAST boss dies
+                        const otherBossAlive = g.enemies.some(o => o !== e && o.alive && o.isBoss);
+                        if (!otherBossAlive) g.enemyBullets = [];
                     } else {
                         g.shakeTimer = 5;
                         addScorePopup(`+${killScore}`, ep.x, ep.y - 20, e.isHeavy ? 0xff8800 : 0xffcc00);
@@ -155,15 +183,35 @@ function update(dt) {
         const playerZ = g.cameraZ + 10;
 
         if (e.isBoss) {
-            // === BOSS AI: stays at far range, remote attack only ===
-            // Maintain hold distance — drift with camera so boss never gets closer
-            const targetZ = playerZ + e.bossHoldZ;
-            e.z += (targetZ - e.z) * 0.08;
-            // Lateral tracking (slow, weaving)
-            const lateralDx = g.player.x - e.x;
-            if (Math.abs(lateralDx) > 25) {
-                e.x += Math.sign(lateralDx) * 0.3;
+            // === BOSS AI: locked at far range, remote attack only ===
+            // Hard-lock to hold distance — never drift closer
+            e.z = playerZ + e.bossHoldZ;
+
+            // Lateral tracking with separation — bosses avoid overlapping
+            const otherBosses = g.enemies.filter(b => b.alive && b.isBoss && b !== e);
+            // Repulsion from other bosses
+            let repelX = 0;
+            const minSep = 80; // 最小间距
+            for (const ob of otherBosses) {
+                const sep = e.x - ob.x;
+                const absSep = Math.abs(sep);
+                if (absSep < minSep) {
+                    // 越近推力越大
+                    const force = (minSep - absSep) / minSep * 0.6;
+                    repelX += (sep === 0 ? (Math.random() - 0.5) : Math.sign(sep)) * force;
+                }
             }
+            // Track player loosely
+            const lateralDx = g.player.x - e.x;
+            const trackSpeed = otherBosses.length > 0 ? 0.2 : 0.3; // 多boss时追踪更慢
+            const deadZone = otherBosses.length > 0 ? 40 : 25; // 多boss时死区更大
+            let moveX = 0;
+            if (Math.abs(lateralDx) > deadZone) {
+                moveX = Math.sign(lateralDx) * trackSpeed;
+            }
+            // Combine tracking + separation, clamp to road
+            e.x += moveX + repelX;
+            e.x = Math.max(-CONFIG.ROAD_HALF_WIDTH * 0.85, Math.min(CONFIG.ROAD_HALF_WIDTH * 0.85, e.x));
             // Ranged attack: shoot at player from far range
             e.bossShootTimer++;
             if (e.bossShootTimer >= e.bossShootInterval) {
@@ -172,8 +220,8 @@ function update(dt) {
                 const dz = playerZ - e.z;
                 const dist = Math.sqrt(dx * dx + dz * dz) || 1;
                 const bossLvl = Math.floor(g.wave / 5);
-                // Early boss bullets are slow and easy to dodge, ramp up with level
-                const speed = Math.min(3.5, 0.8 + bossLvl * 0.5);
+                const mobileScale = _proj.isMobile ? 0.9 : 1.0; // 移动端子弹速度微降10%
+                const speed = Math.min(5.2, 2.6 + bossLvl * 0.52) * mobileScale;
                 // Main shot aimed at player
                 g.enemyBullets.push({
                     x: e.x, z: e.z,
@@ -200,33 +248,88 @@ function update(dt) {
             // === Normal enemy AI ===
             const af = getAdaptiveFactor();
             const speedMult = 1 + (af - 1) * 0.25; // subtle: af=2 → only 1.25x speed
-            e.z -= (CONFIG.ENEMY_SPEED + g.wave * 0.012) * speedMult * g.slowMoFactor;
+            const mobileSpeedScale = _proj.isMobile ? 0.9 : 1.0; // 移动端敌人速度微降10%
+            e.z -= (CONFIG.ENEMY_SPEED + g.wave * 0.012) * speedMult * g.slowMoFactor * mobileSpeedScale;
             const lateralDx = g.player.x - e.x;
             if (Math.abs(lateralDx) > 15) {
                 const blocked = g.enemies.some(o => o !== e && o.alive && Math.abs(o.x - e.x) < 35 && o.z < e.z && o.z > e.z - 60);
-                if (!blocked) e.x += Math.sign(lateralDx) * (CONFIG.ENEMY_LATERAL_SPEED + g.wave * 0.008);
+                if (!blocked) e.x += Math.sign(lateralDx) * (CONFIG.ENEMY_LATERAL_SPEED + g.wave * 0.008) * mobileSpeedScale;
             }
         }
         e.x = Math.max(-CONFIG.ROAD_HALF_WIDTH + 10, Math.min(CONFIG.ROAD_HALF_WIDTH - 10, e.x));
         // Enemy reaches player — check proximity to player position
         const dzToPlayer = e.z - playerZ;
         const dxToPlayer = Math.abs(e.x - g.player.x);
-        if (dzToPlayer < 15 && dzToPlayer > -30 && dxToPlayer < 40) {
-            // Touched the player — die and cost squad based on enemy damage
+        // Close contact: enemy touches player squad directly
+        const closeContact = dzToPlayer < 15 && dzToPlayer > -30 && dxToPlayer < 40;
+        // Passed through: enemy got behind the player line (breached defense)
+        const passedThrough = e.z <= g.cameraZ - 20;
+        if (closeContact || passedThrough) {
+            // Enemy reaches/passes player — die and cost squad based on enemy damage
             e.alive = false;
             if (g.state !== 'gameover') {
-                const dmg = e.damage || 1;
+                if (g.weapon === 'invincibility') {
+                    // 无敌状态：偏转特效，不扣兵力
+                    addParticles(e.x, e.z, 10, 0xffdd44, 3, 12);
+                } else {
+                const rawDmg = e.damage || 1;
+                // 兵力越多防御越高：每15人+1减伤，最多+2
+                const squadArmor = Math.min(2, Math.floor(g.squadCount / 15));
+                const dmg = Math.max(1, rawDmg - (playerData.armor || 0) - squadArmor);
                 g.squadCount = Math.max(0, g.squadCount - dmg);
-                // Show damage number at player position
-                addDamageNumber(g.player.x, g.cameraZ + 10, `−${dmg}`, 0xff3333);
+
+                // --- Troop loss visual effects (mirror of gate "+兵力" effect) ---
+                const lossColor = 0xff3333;
+
+                // 1. Big floating text: "-X 兵力"
+                g.gateText = { text: `−${dmg} 兵力`, color: lossColor, timer: 0, maxTimer: 70, scale: 0.1 };
+
+                // 2. Screen red flash
+                g.gateFlash = { color: lossColor, timer: 15, maxTimer: 15 };
+
+                // 3. Red shatter pieces flying outward from player
+                const playerP = project(g.player.x, 0);
+                for (let f = 0; f < 15 + dmg * 5; f++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const spd = 3 + Math.random() * 5;
+                    g.gateShatterPieces.push({
+                        x: playerP.x + (Math.random() - 0.5) * 40,
+                        y: playerP.y + (Math.random() - 0.5) * 30,
+                        targetX: playerP.x + Math.cos(angle) * 200,
+                        targetY: playerP.y + Math.sin(angle) * 200,
+                        vx: Math.cos(angle) * spd,
+                        vy: Math.sin(angle) * spd,
+                        size: 2 + Math.random() * 4,
+                        color: lossColor,
+                        life: 20 + Math.random() * 15,
+                        maxLife: 35,
+                    });
+                }
+
+                // 4. Red speed lines radiating from player
+                for (let s = 0; s < 16; s++) {
+                    const angle = (s / 16) * Math.PI * 2;
+                    const spd = 6 + Math.random() * 6;
+                    g.speedLines.push({
+                        x: playerP.x, y: playerP.y,
+                        vx: Math.cos(angle) * spd,
+                        vy: Math.sin(angle) * spd,
+                        life: 10 + Math.random() * 8,
+                        maxLife: 18,
+                        length: 20 + Math.random() * 25,
+                        color: lossColor,
+                    });
+                }
+
+                // 5. Explosion particles + shake + vignette
                 addParticles(e.x, e.z, 8 + dmg * 2, 0xff0000, 2.5, 18);
-                g.shakeTimer = Math.min(20, 8 + dmg * 3); g.vignetteFlash = Math.min(1.5, 0.8 + dmg * 0.15);
+                g.shakeTimer = Math.min(20, 8 + dmg * 3);
+                g.vignetteFlash = Math.min(1.5, 0.8 + dmg * 0.15);
+                g.slowMo = 150;
                 playSound('explosion');
                 if (g.squadCount <= 0) { g.state = 'gameover'; showGameOver(); }
+                } // end else (not invincible)
             }
-        } else if (e.z <= g.cameraZ - 50) {
-            // Safety cleanup: enemy went way past camera without collision
-            e.alive = false;
         }
     });
 
@@ -247,14 +350,49 @@ function update(dt) {
         if (Math.abs(eb.z - pz) < 18 && Math.abs(eb.x - g.player.x) < 30) {
             eb.dead = true;
             if (g.state !== 'gameover') {
-                const dmg = eb.damage || 1;
+                if (g.weapon === 'invincibility') {
+                    // 无敌状态：偏转特效，不扣兵力
+                    addParticles(g.player.x, pz, 10, 0xffdd44, 3, 12);
+                    g.shakeTimer = Math.min(g.shakeTimer, 3);
+                } else {
+                const rawDmg = eb.damage || 1;
+                // 兵力越多防御越高：每15人+1减伤，最多+2
+                const squadArmor = Math.min(2, Math.floor(g.squadCount / 15));
+                const dmg = Math.max(1, rawDmg - (playerData.armor || 0) - squadArmor);
                 g.squadCount = Math.max(0, g.squadCount - dmg);
-                addDamageNumber(g.player.x, g.cameraZ + 10, `−${dmg}`, 0xff3333);
+                const hitColor = 0xff3333;
+                g.gateText = { text: `−${dmg} 兵力`, color: hitColor, timer: 0, maxTimer: 70, scale: 0.1 };
+                g.gateFlash = { color: hitColor, timer: 12, maxTimer: 12 };
+                const pp = project(g.player.x, 0);
+                for (let f = 0; f < 10 + dmg * 3; f++) {
+                    const a = Math.random() * Math.PI * 2;
+                    g.gateShatterPieces.push({
+                        x: pp.x + (Math.random() - 0.5) * 30,
+                        y: pp.y + (Math.random() - 0.5) * 20,
+                        targetX: pp.x + Math.cos(a) * 150,
+                        targetY: pp.y + Math.sin(a) * 150,
+                        vx: Math.cos(a) * (3 + Math.random() * 4),
+                        vy: Math.sin(a) * (3 + Math.random() * 4),
+                        size: 2 + Math.random() * 3, color: hitColor,
+                        life: 15 + Math.random() * 12, maxLife: 27,
+                    });
+                }
+                for (let s = 0; s < 12; s++) {
+                    const a = (s / 12) * Math.PI * 2;
+                    g.speedLines.push({
+                        x: pp.x, y: pp.y,
+                        vx: Math.cos(a) * (5 + Math.random() * 5),
+                        vy: Math.sin(a) * (5 + Math.random() * 5),
+                        life: 8 + Math.random() * 6, maxLife: 14,
+                        length: 15 + Math.random() * 20, color: hitColor,
+                    });
+                }
                 addParticles(g.player.x, pz, 6 + dmg, 0xff4444, 2, 12);
                 g.shakeTimer = Math.min(15, 6 + dmg * 2);
                 g.vignetteFlash = Math.min(1.2, 0.6 + dmg * 0.1);
                 playSound('explosion');
                 if (g.squadCount <= 0) { g.state = 'gameover'; showGameOver(); }
+                } // end else (not invincible)
             }
         }
     });
@@ -412,6 +550,127 @@ function update(dt) {
         }
     });
 
+    // Coin physics + pickup
+    const playerZ = g.cameraZ + 10;
+    g.coins.forEach(coin => {
+        // Physics: scatter then settle
+        coin.x += coin.vx;
+        coin.z += coin.vz;
+        coin.y += coin.vy;
+        coin.vy += 0.25; // gravity
+        if (coin.y > 0) { coin.y = 0; coin.vy = -coin.vy * 0.3; coin.vx *= 0.8; coin.vz *= 0.8; }
+        coin.vx *= 0.97; coin.vz *= 0.97;
+        coin.bobPhase += 0.08;
+        coin.life--;
+        // Magnet: pull toward player when close
+        const dx = g.player.x - coin.x;
+        const dz = playerZ - coin.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist < COIN_MAGNET_RANGE) {
+            const pull = 0.15 * (1 - dist / COIN_MAGNET_RANGE);
+            coin.x += dx * pull;
+            coin.z += dz * pull;
+        }
+        // Pickup
+        if (dist < 25) {
+            coin.collected = true;
+            g.coinsCollected += coin.value;
+            playerData.coins += coin.value;
+            savePlayerData(playerData);
+            // Pickup effect — golden burst with speed lines
+            const cp = project(coin.x, coin.z - g.cameraZ);
+            addScorePopup(`🪙+${coin.value}`, cp.x, cp.y - 20, 0xffd700);
+            addParticles(coin.x, coin.z, 14, 0xffd700, 4, 18);
+            addParticles(coin.x, coin.z, 6, 0xffffff, 3, 10);
+            addParticles(coin.x, coin.z, 4, 0xffaa00, 2, 12);
+            // Speed lines radiating from pickup point
+            for (let s = 0; s < 8; s++) {
+                const a = (s / 8) * Math.PI * 2;
+                g.speedLines.push({
+                    x: cp.x, y: cp.y,
+                    vx: Math.cos(a) * (4 + Math.random() * 3),
+                    vy: Math.sin(a) * (4 + Math.random() * 3),
+                    life: 6 + Math.random() * 4, maxLife: 10,
+                    length: 12 + Math.random() * 10, color: 0xffd700,
+                });
+            }
+            g.screenFlash = Math.max(g.screenFlash, 0.12);
+            g.shakeTimer = Math.max(g.shakeTimer, 3);
+            // Big floating text like troop change
+            g.gateText = { text: `🪙 +${coin.value} 金币`, color: 0xffd700, timer: 0, maxTimer: 60, scale: 0.1 };
+            g.gateFlash = { color: 0xffd700, timer: 10, maxTimer: 10 };
+            playSound('gate_good');
+        }
+    });
+    g.coins = g.coins.filter(c => !c.collected && c.life > 0);
+
+    // Gem physics + pickup
+    const GEM_MAGNET_RANGE = 120;
+    g.gems.forEach(gem => {
+        gem.x += gem.vx;
+        gem.z += gem.vz;
+        gem.y += gem.vy;
+        gem.vy += 0.25;
+        if (gem.y > 0) { gem.y = 0; gem.vy = -gem.vy * 0.25; gem.vx *= 0.75; gem.vz *= 0.75; }
+        gem.vx *= 0.97; gem.vz *= 0.97;
+        gem.bobPhase += 0.06;
+        gem.life--;
+        const gdx = g.player.x - gem.x;
+        const gdz = playerZ - gem.z;
+        const gdist = Math.sqrt(gdx * gdx + gdz * gdz);
+        if (gdist < GEM_MAGNET_RANGE) {
+            const pull = 0.12 * (1 - gdist / GEM_MAGNET_RANGE);
+            gem.x += gdx * pull;
+            gem.z += gdz * pull;
+        }
+        if (gdist < 25) {
+            gem.collected = true;
+            g.gemsCollected += gem.value;
+            playerData.gems = (playerData.gems || 0) + gem.value;
+            savePlayerData(playerData);
+            // Pickup effect — purple explosion with blast ring + speed lines
+            const gp = project(gem.x, gem.z - g.cameraZ);
+            addScorePopup(`💎+${gem.value}`, gp.x, gp.y - 25, 0xcc44ff);
+            addParticles(gem.x, gem.z, 20, 0xaa22ff, 5, 25);
+            addParticles(gem.x, gem.z, 10, 0xffffff, 4, 12);
+            addParticles(gem.x, gem.z, 8, 0xcc88ff, 6, 18);
+            addParticles(gem.x, gem.z, 4, 0xff44ff, 3, 15);
+            // Speed lines radiating from pickup — more dramatic
+            for (let s = 0; s < 16; s++) {
+                const a = (s / 16) * Math.PI * 2;
+                const spd = 5 + Math.random() * 5;
+                g.speedLines.push({
+                    x: gp.x, y: gp.y,
+                    vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+                    life: 8 + Math.random() * 6, maxLife: 14,
+                    length: 18 + Math.random() * 15, color: 0xcc44ff,
+                });
+            }
+            // Shatter pieces flying outward
+            for (let f = 0; f < 12; f++) {
+                const a = Math.random() * Math.PI * 2;
+                g.gateShatterPieces.push({
+                    x: gp.x + (Math.random() - 0.5) * 20,
+                    y: gp.y + (Math.random() - 0.5) * 15,
+                    targetX: gp.x + Math.cos(a) * 150,
+                    targetY: gp.y + Math.sin(a) * 150,
+                    vx: Math.cos(a) * (3 + Math.random() * 3),
+                    vy: Math.sin(a) * (3 + Math.random() * 3),
+                    size: 2 + Math.random() * 4, color: 0xcc44ff,
+                    life: 18 + Math.random() * 10, maxLife: 28,
+                });
+            }
+            g.screenFlash = Math.max(g.screenFlash, 0.25);
+            g.shakeTimer = Math.max(g.shakeTimer, 8);
+            g.slowMo = Math.max(g.slowMo, 80);
+            // Big floating text like troop change
+            g.gateText = { text: `💎 +${gem.value} 宝石`, color: 0xcc44ff, timer: 0, maxTimer: 70, scale: 0.1 };
+            g.gateFlash = { color: 0xcc44ff, timer: 12, maxTimer: 12 };
+            playSound('weapon_pickup');
+        }
+    });
+    g.gems = g.gems.filter(gem => !gem.collected && gem.life > 0);
+
     // Cleanup
     g.enemies = g.enemies.filter(e => e.alive || e.z > g.cameraZ - 50);
     g.gates = g.gates.filter(gate => gate.z > g.cameraZ - 50 && (!gate.triggered || gate.fadeTimer > 0));
@@ -422,7 +681,8 @@ function update(dt) {
     // Particles
     g.particles.forEach(p => { p.x += p.vx; p.z += p.vz; p.y += p.vy; p.vy += 0.3; p.life--; });
     g.particles = g.particles.filter(p => p.life > 0);
-    if (g.particles.length > 400) g.particles.splice(0, g.particles.length - 300);
+    const particleLimit = _proj.isMobile ? 150 : 400;
+    if (g.particles.length > particleLimit) g.particles.splice(0, g.particles.length - Math.floor(particleLimit * 0.75));
 
     // Explosions
     g.explosions.forEach(e => e.timer++);

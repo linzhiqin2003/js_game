@@ -35,21 +35,23 @@ html, body {
 }
 #overlay.hidden { opacity: 0; pointer-events: none; }
 #overlay h1 {
-    font-size: 72px;
+    font-size: min(72px, 12vw);
     color: #f0c040;
     text-shadow: 4px 4px 0 #804000, 0 0 30px rgba(240,192,64,0.6);
     margin-bottom: 12px;
-    letter-spacing: 6px;
+    letter-spacing: min(6px, 1vw);
+    text-align: center;
+    padding: 0 10px;
 }
 #overlay h2 {
-    font-size: 20px;
+    font-size: min(20px, 4vw);
     color: #aaa;
-    margin-bottom: 40px;
+    margin-bottom: min(40px, 6vh);
     font-weight: normal;
 }
 #overlay .btn {
-    padding: 20px 60px;
-    font-size: 28px;
+    padding: min(20px, 4vw) min(60px, 12vw);
+    font-size: min(28px, 5.5vw);
     font-family: 'Courier New', monospace;
     font-weight: bold;
     background: linear-gradient(180deg, #f0c040, #c08020);
@@ -58,8 +60,605 @@ html, body {
     cursor: pointer;
     letter-spacing: 2px;
     transition: transform 0.1s;
+    -webkit-tap-highlight-color: transparent;
 }
 #overlay .btn:hover { transform: scale(1.05); }
 #overlay .btn:active { transform: scale(0.95); }
-#scoreDisplay { color: #f0c040; font-size: 28px; margin: 16px 0 8px; }
-#finalScore { color: #fff; font-size: 56px; margin: 8px 0 20px; font-weight: bold; text-shadow: 0 0 15px rgba(255,255,255,0.3); }
+#scoreDisplay { color: #f0c040; font-size: min(28px, 5vw); margin: 16px 0 8px; }
+#finalScore { color: #fff; font-size: min(56px, 10vw); margin: 8px 0 20px; font-weight: bold; text-shadow: 0 0 15px rgba(255,255,255,0.3); }
+
+/* Pause button — top-right, touch-friendly */
+#pauseBtn {
+    position: fixed;
+    top: 8px; right: 8px;
+    z-index: 5;
+    width: 44px; height: 44px;
+    border-radius: 8px;
+    border: 2px solid rgba(255,255,255,0.25);
+    background: rgba(0,0,0,0.45);
+    color: #fff;
+    font-size: 18px;
+    line-height: 44px;
+    text-align: center;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    display: none; /* shown by JS on touch devices */
+}
+#pauseBtn:active { background: rgba(255,255,255,0.2); }
+
+/* Skill activation button — bottom-right, touch-friendly */
+#skillBtn {
+    position: fixed;
+    bottom: 20px; right: 20px;
+    z-index: 5;
+    width: 70px; height: 70px;
+    border-radius: 50%;
+    border: 3px solid rgba(255,200,0,0.6);
+    background: rgba(0,0,0,0.5);
+    color: #ffd700;
+    font-size: 13px;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    text-align: center;
+    line-height: 70px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    display: none; /* shown by JS when skill weapon equipped */
+    box-shadow: 0 0 15px rgba(255,200,0,0.2);
+}
+#skillBtn:active { background: rgba(255,200,0,0.3); transform: scale(0.92); }
+
+/* ============================================================
+   COIN DISPLAY (on overlay)
+   ============================================================ */
+#coinDisplay {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: min(24px, 3vh);
+    font-size: min(24px, 5vw);
+    color: #ffd700;
+    text-shadow: 0 0 10px rgba(255,215,0,0.5);
+}
+.coin-icon {
+    font-size: 1.2em;
+}
+
+/* Menu buttons row */
+#menuButtons {
+    display: flex;
+    gap: min(20px, 4vw);
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.btn-shop {
+    background: linear-gradient(180deg, #6040f0, #4020c0) !important;
+    border-color: #7050ff !important;
+    color: #fff !important;
+}
+.btn-shop:hover { transform: scale(1.05); }
+
+/* ============================================================
+   SHOP OVERLAY
+   ============================================================ */
+#shopOverlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: rgba(0,0,0,0.92);
+    z-index: 20;
+    transition: opacity 0.3s;
+}
+#shopOverlay.hidden { opacity: 0; pointer-events: none; }
+#shopPanel::-webkit-scrollbar { display: none; }
+
+#shopPanel {
+    width: min(600px, 90vw);
+    max-height: 85vh;
+    overflow-y: auto;
+    scrollbar-width: none;
+    padding: min(30px, 5vw);
+    background: linear-gradient(180deg, #1a1a30, #0a0a1a);
+    border: 2px solid #4030a0;
+    border-radius: 16px;
+    box-shadow: 0 0 40px rgba(80,50,200,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+#shopHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: min(24px, 3vh);
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+#shopHeader h2 {
+    font-size: min(28px, 5.5vw);
+    color: #c0a0ff;
+    letter-spacing: 3px;
+    margin: 0;
+}
+#shopCurrencies {
+    display: flex;
+    gap: min(16px, 3vw);
+    align-items: center;
+}
+#shopCoins {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: min(20px, 4vw);
+    color: #ffd700;
+    font-weight: bold;
+}
+#shopGems {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: min(20px, 4vw);
+    color: #cc44ff;
+    font-weight: bold;
+    text-shadow: 0 0 8px rgba(180,50,255,0.5);
+}
+
+/* Shop tabs */
+#shopTabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: min(18px, 2.5vh);
+}
+.shop-tab {
+    flex: 1;
+    padding: min(10px, 2vw) 0;
+    font-size: min(15px, 3.2vw);
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    color: #aaa;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+}
+.shop-tab:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.shop-tab.active {
+    background: rgba(100,60,220,0.35);
+    border-color: #6040e0;
+    color: #c0a0ff;
+}
+
+/* Shop items grid */
+#shopItems {
+    display: flex;
+    flex-direction: column;
+    gap: min(16px, 2.5vw);
+    margin-bottom: min(20px, 3vh);
+}
+
+.shop-item {
+    display: flex;
+    align-items: center;
+    gap: min(16px, 3vw);
+    padding: min(16px, 3vw);
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    transition: background 0.15s, border-color 0.15s;
+}
+.shop-item:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.15);
+}
+.shop-item.owned {
+    border-color: rgba(100,200,100,0.3);
+}
+.shop-item.equipped {
+    border-color: rgba(255,215,0,0.5);
+    background: rgba(255,215,0,0.06);
+}
+
+.shop-item-icon {
+    font-size: min(40px, 8vw);
+    width: min(56px, 11vw);
+    height: min(56px, 11vw);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    flex-shrink: 0;
+}
+
+.shop-item-info {
+    flex: 1;
+    min-width: 0;
+}
+.shop-item-name {
+    font-size: min(18px, 3.8vw);
+    font-weight: bold;
+    color: #fff;
+    margin-bottom: 4px;
+}
+.shop-item-desc {
+    font-size: min(13px, 2.8vw);
+    color: #999;
+    margin-bottom: 6px;
+}
+.shop-item-duration {
+    font-size: min(12px, 2.5vw);
+    color: #888;
+}
+
+.shop-item-action {
+    flex-shrink: 0;
+}
+
+.btn-buy, .btn-equip, .btn-equipped {
+    padding: min(10px, 2vw) min(20px, 4vw);
+    font-size: min(14px, 3vw);
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    border: 2px solid;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.1s, opacity 0.15s;
+    -webkit-tap-highlight-color: transparent;
+    white-space: nowrap;
+}
+.btn-buy {
+    background: linear-gradient(180deg, #ffd700, #c0a000);
+    color: #1a0a00;
+    border-color: #ffe040;
+}
+.btn-buy:hover { transform: scale(1.05); }
+.btn-buy:active { transform: scale(0.95); }
+.btn-buy:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-equip {
+    background: linear-gradient(180deg, #4080ff, #2060d0);
+    color: #fff;
+    border-color: #5090ff;
+}
+.btn-equip:hover { transform: scale(1.05); }
+
+.btn-equipped {
+    background: rgba(255,215,0,0.15);
+    color: #ffd700;
+    border-color: #ffd700;
+    cursor: default;
+}
+
+.btn-back {
+    display: block;
+    margin: 0 auto;
+    background: linear-gradient(180deg, #555, #333) !important;
+    border-color: #777 !important;
+    color: #ddd !important;
+    padding: min(14px, 3vw) min(40px, 8vw) !important;
+    font-size: min(20px, 4vw) !important;
+}
+
+#equippedInfo {
+    text-align: center;
+    margin-bottom: min(16px, 2.5vh);
+    font-size: min(14px, 3vw);
+    color: #aaa;
+    min-height: 20px;
+}
+
+/* ============================================================
+   TALENT SYSTEM
+   ============================================================ */
+.talent-hint {
+    text-align: center;
+    font-size: min(14px, 3vw);
+    color: #aaa;
+    min-height: 20px;
+    margin-bottom: min(14px, 2vh);
+}
+
+#defenseInfo {
+    text-align: center;
+    font-size: min(14px, 3vw);
+    color: #aaa;
+    min-height: 20px;
+    margin-bottom: min(16px, 2.5vh);
+}
+
+#talentItems {
+    display: flex;
+    flex-direction: column;
+    gap: min(14px, 2.2vw);
+    margin-bottom: min(16px, 2.5vh);
+}
+
+.talent-item {
+    border-color: rgba(150,50,200,0.2) !important;
+}
+.talent-item:hover {
+    border-color: rgba(180,80,255,0.4) !important;
+    background: rgba(150,50,200,0.06) !important;
+}
+.talent-maxed {
+    border-color: rgba(200,100,255,0.5) !important;
+    background: rgba(150,50,200,0.1) !important;
+}
+
+.talent-icon {
+    font-size: min(32px, 6.5vw) !important;
+}
+
+.talent-level-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+.talent-pips {
+    display: flex;
+    gap: 4px;
+}
+.talent-pip {
+    width: min(12px, 2.5vw);
+    height: min(12px, 2.5vw);
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.2);
+    display: inline-block;
+}
+.talent-pip.filled {
+    background: #cc44ff;
+    border-color: #ee88ff;
+    box-shadow: 0 0 5px rgba(200,80,255,0.7);
+}
+.talent-effect {
+    font-size: min(12px, 2.6vw);
+    font-weight: bold;
+}
+
+.btn-talent-buy {
+    padding: min(8px, 1.8vw) min(14px, 3vw);
+    font-size: min(14px, 3vw);
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    background: linear-gradient(180deg, #9933ff, #6600cc);
+    color: #fff;
+    border: 2px solid #bb55ff;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.1s, opacity 0.15s;
+    -webkit-tap-highlight-color: transparent;
+    text-align: center;
+    min-width: min(64px, 14vw);
+}
+.btn-talent-buy:hover { transform: scale(1.05); }
+.btn-talent-buy:active { transform: scale(0.95); }
+.btn-talent-buy:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    transform: none;
+    background: linear-gradient(180deg, #553388, #331166);
+}
+.talent-btn-sub {
+    font-size: min(10px, 2.2vw);
+    color: rgba(255,255,255,0.7);
+    margin-top: 2px;
+}
+.talent-maxed-btn {
+    background: rgba(200,100,255,0.2) !important;
+    color: #cc88ff !important;
+    border-color: #9944cc !important;
+    cursor: default !important;
+}
+
+/* ============================================================
+   DEFENSE / ARMOR SYSTEM
+   ============================================================ */
+#defenseItems {
+    display: flex;
+    flex-direction: column;
+    gap: min(14px, 2.2vw);
+    margin-bottom: min(16px, 2.5vh);
+}
+
+.armor-item {
+    border-color: rgba(50, 100, 220, 0.2) !important;
+}
+.armor-item:hover {
+    border-color: rgba(80, 150, 255, 0.4) !important;
+    background: rgba(50, 100, 200, 0.06) !important;
+}
+.armor-item.owned {
+    border-color: rgba(100, 180, 255, 0.5) !important;
+    background: rgba(50, 100, 200, 0.08) !important;
+}
+
+/* 充能数量徽章 */
+.skill-charge-badge {
+    font-size: min(20px, 4.2vw);
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-shadow: 0 0 8px currentColor;
+}
+
+/* ============================================================
+   WEAPON SLOTS (bottom-left, shown during gameplay)
+   ============================================================ */
+#weaponSlots {
+    position: fixed;
+    bottom: 20px;
+    left: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    z-index: 5;
+    pointer-events: auto;
+    padding: 8px;
+    background: rgba(8,8,20,0.72);
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.07);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+}
+
+.wslot {
+    position: relative;
+    width: min(190px, 42vw);
+    height: min(46px, 11vw);
+    border-radius: 9px;
+    border: 1.5px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.04);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: min(10px, 2.2vw);
+    padding: 0 min(10px, 2.2vw);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s, opacity 0.2s;
+    overflow: hidden;
+}
+.wslot:active { transform: scale(0.96); }
+
+/* Key badge */
+.wslot-key {
+    font-family: 'Courier New', monospace;
+    font-size: min(11px, 2.4vw);
+    font-weight: bold;
+    color: rgba(255,255,255,0.3);
+    flex-shrink: 0;
+    width: min(22px, 5vw);
+    text-align: center;
+}
+
+.wslot-icon {
+    font-size: min(22px, 5vw);
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.wslot-count {
+    font-family: 'Courier New', monospace;
+    font-size: min(13px, 3vw);
+    font-weight: bold;
+    line-height: 1;
+    flex: 1;
+    transition: color 0.2s;
+}
+
+/* Cooldown / active overlay */
+.wslot-cd {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    border-radius: 7px;
+    background: rgba(0,0,0,0.7);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Courier New', monospace;
+    font-size: min(18px, 4vw);
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+}
+
+/* Duration progress bar at bottom edge */
+.wslot-bar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 3px;
+    background: rgba(255,255,255,0.08);
+    display: none;
+}
+.wslot-bar-fill {
+    height: 100%;
+    border-radius: 0 0 7px 7px;
+    transition: width 0.1s linear;
+}
+
+/* Pulse animation for ready state */
+@keyframes wslot-glow {
+    0%, 100% { box-shadow: 0 0 6px color-mix(in srgb, var(--wcolor) 40%, transparent); }
+    50%       { box-shadow: 0 0 14px color-mix(in srgb, var(--wcolor) 70%, transparent); }
+}
+
+/* State classes */
+.wslot-active {
+    background: rgba(255,215,0,0.08);
+    box-shadow: 0 0 12px rgba(255,215,0,0.4);
+}
+.wslot-empty {
+    opacity: 0.22;
+}
+.wslot-ready {
+    animation: wslot-glow 2s ease-in-out infinite;
+}
+.wslot-dim {
+    opacity: 0.4;
+}
+
+/* ============================================================
+   MOBILE PORTRAIT ADAPTATIONS (portrait phones)
+   ============================================================ */
+@media screen and (max-width: 480px) {
+    /* 1. Weapon slots: horizontal row centered at bottom */
+    #weaponSlots {
+        flex-direction: row;
+        left: 50%;
+        right: auto;
+        bottom: 10px;
+        transform: translateX(-50%);
+        gap: 5px;
+        padding: 5px 7px;
+    }
+    .wslot {
+        width: min(70px, 22vw);
+        height: min(64px, 16vw);
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 2px;
+        padding: 3px;
+    }
+    .wslot-key { display: none; } /* keyboard hint not needed on mobile */
+    .wslot-icon { font-size: min(24px, 6.5vw); }
+    .wslot-count { font-size: min(11px, 3vw); text-align: center; }
+
+    /* 2. Shop: full-width starting from top */
+    #shopOverlay {
+        align-items: flex-start;
+        padding-top: 0;
+    }
+    #shopPanel {
+        width: 100vw;
+        max-height: 100dvh;
+        max-height: 100vh;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+        border-top: none;
+        padding: 14px 12px;
+    }
+    .shop-item {
+        padding: 10px;
+        gap: 10px;
+    }
+    .shop-item-icon {
+        font-size: min(32px, 7.5vw);
+        width: min(44px, 11vw);
+        height: min(44px, 11vw);
+    }
+    /* Shop tabs slightly compact */
+    .shop-tab {
+        padding: min(8px, 1.8vw) 0;
+        font-size: min(13px, 3.5vw);
+    }
+}

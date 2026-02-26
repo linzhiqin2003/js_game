@@ -2,7 +2,7 @@
 // DRAWING: SKY
 // ============================================================
 function drawSky(gfx) {
-    const hY = screenH * CONFIG.HORIZON_RATIO;
+    const hY = screenH * getHorizonRatio();
     // Sky gradient (strips)
     const colors = [0x2a3a5a, 0x4a6a8a, 0x6a8aaa, 0x8aaacc, 0xaac0da];
     const steps = 25;
@@ -104,7 +104,7 @@ function drawRailing(gfx, side) {
         const p = project(railX, z);
         const postH = 25 * p.scale;
         const postW = Math.max(1, 3 * p.scale);
-        if (p.y < screenH * CONFIG.HORIZON_RATIO) continue;
+        if (p.y < screenH * getHorizonRatio()) continue;
         const a = Math.max(0, 1 - i / numPosts);
 
         gfx.rect(p.x - postW / 2, p.y - postH, postW, postH).fill({ color: 0x646e78, alpha: a });
@@ -131,7 +131,7 @@ function drawRoadDecor(gfx) {
         const relZ = d.z - (g.cameraZ % (200 * 40));
         if (relZ < 0 || relZ > 800) return;
         const p = project(d.x, relZ);
-        if (p.y < screenH * CONFIG.HORIZON_RATIO) return;
+        if (p.y < screenH * getHorizonRatio()) return;
         const s = p.scale * d.size;
         const a = 0.2 * p.scale;
         gfx.rect(p.x - s, p.y - s * 0.3, s * 2, s * 0.6)
@@ -142,7 +142,15 @@ function drawRoadDecor(gfx) {
 // ============================================================
 // DRAWING: CHARACTERS
 // ============================================================
-function drawPlayerSoldier(gfx, sx, sy, scale, animFrame) {
+// Soldier tier colors: normal(0), silver(1), gold(2)
+const SOLDIER_TIERS = [
+    { body: 0xc07020, bodyHi: 0xd08030, hat: 0xf0c040, hatHi: 0xe0b030, brim: 0xd0a020, arm: 0xc07020, armOuter: 0x606060 }, // normal
+    { body: 0x6080b0, bodyHi: 0x7090c0, hat: 0xc0c8d8, hatHi: 0xb0b8c8, brim: 0xa0a8b8, arm: 0x6080b0, armOuter: 0x506080 }, // silver
+    { body: 0xd4a020, bodyHi: 0xe4b030, hat: 0xffd700, hatHi: 0xf0c800, brim: 0xddb000, arm: 0xd4a020, armOuter: 0x907010 }, // gold
+];
+
+function drawPlayerSoldier(gfx, sx, sy, scale, animFrame, tier) {
+    const t = SOLDIER_TIERS[tier || 0];
     const s = Math.max(1, scale * CONFIG.PIXEL_SIZE * 2.8);
     const legOffset = Math.sin(animFrame * 0.15) * 1.5 * s;
     // Shadow
@@ -154,23 +162,29 @@ function drawPlayerSoldier(gfx, sx, sy, scale, animFrame) {
     px(gfx, sx - 2.5 * s, sy - 4 * s + legOffset, 2 * s, 2.5 * s, 0x3a3a3a);
     px(gfx, sx + 0.5 * s, sy - 4 * s - legOffset, 2 * s, 2.5 * s, 0x3a3a3a);
     // Body
-    px(gfx, sx - 4 * s, sy - 9 * s, 8 * s, 5.5 * s, 0xc07020);
-    px(gfx, sx - 3 * s, sy - 8 * s, 6 * s, 1 * s, 0xd08030);
+    px(gfx, sx - 4 * s, sy - 9 * s, 8 * s, 5.5 * s, t.body);
+    px(gfx, sx - 3 * s, sy - 8 * s, 6 * s, 1 * s, t.bodyHi);
     // Arms
-    px(gfx, sx - 5 * s, sy - 8 * s, 1.5 * s, 4 * s, 0x606060);
-    px(gfx, sx + 3.5 * s, sy - 8 * s, 1.5 * s, 4 * s, 0x606060);
-    px(gfx, sx - 5 * s, sy - 8.5 * s, 1.5 * s, 3 * s, 0xc07020);
-    px(gfx, sx + 3.5 * s, sy - 8.5 * s, 1.5 * s, 3 * s, 0xc07020);
+    px(gfx, sx - 5 * s, sy - 8 * s, 1.5 * s, 4 * s, t.armOuter);
+    px(gfx, sx + 3.5 * s, sy - 8 * s, 1.5 * s, 4 * s, t.armOuter);
+    px(gfx, sx - 5 * s, sy - 8.5 * s, 1.5 * s, 3 * s, t.arm);
+    px(gfx, sx + 3.5 * s, sy - 8.5 * s, 1.5 * s, 3 * s, t.arm);
     // Neck + Head
     px(gfx, sx - 1 * s, sy - 10 * s, 2 * s, 1.5 * s, 0xd4a574);
     px(gfx, sx - 2.5 * s, sy - 13 * s, 5 * s, 3.5 * s, 0xd4a574);
     // Hat
-    px(gfx, sx - 3.5 * s, sy - 16 * s, 7 * s, 3.5 * s, 0xf0c040);
-    px(gfx, sx - 3 * s, sy - 16.5 * s, 6 * s, 1 * s, 0xe0b030);
-    px(gfx, sx - 4 * s, sy - 13 * s, 8 * s, 1 * s, 0xd0a020);
+    px(gfx, sx - 3.5 * s, sy - 16 * s, 7 * s, 3.5 * s, t.hat);
+    px(gfx, sx - 3 * s, sy - 16.5 * s, 6 * s, 1 * s, t.hatHi);
+    px(gfx, sx - 4 * s, sy - 13 * s, 8 * s, 1 * s, t.brim);
     // Gun
     px(gfx, sx - 1 * s, sy - 14 * s, 2 * s, 5.5 * s, 0x404040);
     px(gfx, sx - 0.5 * s, sy - 17 * s, 1 * s, 3 * s, 0x505050);
+    // Tier glow for elite soldiers
+    if (tier === 1) {
+        gfx.ellipse(sx, sy - 8 * s, 6 * s, 10 * s).fill({ color: 0xc0d0e0, alpha: 0.08 });
+    } else if (tier === 2) {
+        gfx.ellipse(sx, sy - 8 * s, 6 * s, 10 * s).fill({ color: 0xffd700, alpha: 0.12 });
+    }
 }
 
 function drawEnemySoldier(gfx, sx, sy, scale, animFrame, hitFlash, type) {
@@ -714,16 +728,38 @@ function drawBarrelExplosionTexts() {
 // ============================================================
 function drawSquadAndPlayer(gfx) {
     const g = game;
-    // Squad members — scale columns by squad size for visible growth
-    const maxDraw = Math.min(g.squadCount, 40); // draw up to 40
-    const cols = g.squadCount <= 5 ? 3 : g.squadCount <= 15 ? 5 : 7;
-    const spacing = g.squadCount <= 15 ? 25 : 20; // tighter when many
-    for (let i = 1; i < maxDraw; i++) {
-        const row = Math.ceil(i / cols);
-        const col = ((i - 1) % cols) - Math.floor(cols / 2);
-        const soldierScale = g.squadCount <= 15 ? 0.85 : g.squadCount <= 30 ? 0.7 : 0.55;
+    // Build display list: gold(tier2)=10兵力, silver(tier1)=3兵力, normal(tier0)=1兵力
+    const squad = g.squadCount;
+    let remaining = squad - 1; // exclude player character
+    const drawList = []; // { tier }
+    if (remaining > 0 && squad > 40) {
+        const goldCount = Math.floor(remaining / 10);
+        remaining -= goldCount * 10;
+        const silverCount = Math.floor(remaining / 3);
+        remaining -= silverCount * 3;
+        for (let i = 0; i < goldCount; i++) drawList.push(2);
+        for (let i = 0; i < silverCount; i++) drawList.push(1);
+        for (let i = 0; i < remaining; i++) drawList.push(0);
+    } else {
+        for (let i = 0; i < remaining; i++) drawList.push(0);
+    }
+    // Shuffle so tiers are mixed visually
+    for (let i = drawList.length - 1; i > 0; i--) {
+        // Use deterministic-ish shuffle based on index to avoid flickering each frame
+        const j = (i * 7 + 3) % (i + 1);
+        [drawList[i], drawList[j]] = [drawList[j], drawList[i]];
+    }
+    const maxDraw = Math.min(drawList.length, 40);
+    const cols = squad <= 5 ? 3 : squad <= 15 ? 5 : 7;
+    const spacing = squad <= 15 ? 25 : 20; // tighter when many
+    for (let i = 0; i < maxDraw; i++) {
+        const row = Math.ceil((i + 1) / cols);
+        const col = (i % cols) - Math.floor(cols / 2);
+        const soldierScale = squad <= 15 ? 0.85 : squad <= 30 ? 0.7 : 0.55;
+        // Elite soldiers slightly bigger
+        const tierScale = drawList[i] === 2 ? 1.15 : drawList[i] === 1 ? 1.07 : 1.0;
         const sp = project(g.player.x + col * spacing, row * (spacing * 0.8));
-        drawPlayerSoldier(gfx, sp.x, sp.y, sp.scale * soldierScale, g.player.animFrame + i * 3);
+        drawPlayerSoldier(gfx, sp.x, sp.y, sp.scale * soldierScale * tierScale, g.player.animFrame + i * 3, drawList[i]);
     }
 
     // Squad count badge (always show when > maxDraw or > 8 for clarity)
@@ -738,9 +774,82 @@ function drawSquadAndPlayer(gfx) {
         badge.visible = true;
     }
 
-    // Main player
+    // Main player — ground aura + arrow indicator for visibility
     const pp = project(g.player.x, 0);
-    drawPlayerSoldier(gfx, pp.x, pp.y, pp.scale, g.player.animFrame);
+    const now = Date.now();
+    const glowPulse = Math.sin(now * 0.004) * 0.3 + 0.7;
+    const fastPulse = Math.sin(now * 0.008) * 0.5 + 0.5;
+
+    // === Ground aura at player's feet — BIG, bright, unmissable ===
+    const auraRx = 55 * pp.scale, auraRy = 18 * pp.scale;
+    // Outermost soft bloom
+    gfx.ellipse(pp.x, pp.y, auraRx * 2.0, auraRy * 2.0).fill({ color: 0x00aaff, alpha: 0.06 * glowPulse });
+    // Wide glow
+    gfx.ellipse(pp.x, pp.y, auraRx * 1.4, auraRy * 1.4).fill({ color: 0x00ccff, alpha: 0.12 * glowPulse });
+    // Main filled ellipse
+    gfx.ellipse(pp.x, pp.y, auraRx, auraRy).fill({ color: 0x00bbff, alpha: 0.45 * glowPulse });
+    // Bright ring stroke
+    gfx.ellipse(pp.x, pp.y, auraRx, auraRy).stroke({ width: Math.max(3, 4.5 * pp.scale), color: 0x44eeff, alpha: 0.85 * glowPulse });
+    // Inner bright core
+    gfx.ellipse(pp.x, pp.y, auraRx * 0.45, auraRy * 0.45).fill({ color: 0xaaeeff, alpha: 0.35 * glowPulse });
+    // Spinning highlight dots on the ring
+    for (let i = 0; i < 4; i++) {
+        const angle = (now * 0.003) + i * Math.PI / 2;
+        const dotX = pp.x + Math.cos(angle) * auraRx * 0.85;
+        const dotY = pp.y + Math.sin(angle) * auraRy * 0.85;
+        gfx.circle(dotX, dotY, Math.max(2, 3.5 * pp.scale)).fill({ color: 0xffffff, alpha: 0.7 * glowPulse });
+    }
+
+    // === Downward-pointing arrow — BIGGER, brighter, bobbing ===
+    const bobY = Math.sin(now * 0.005) * 6 * pp.scale;
+    const arrBase = pp.y - 65 * pp.scale + bobY;
+    const arrW = 16 * pp.scale;
+    const arrH = 20 * pp.scale;
+    const arrStemW = 7 * pp.scale;
+    const arrStemH = 14 * pp.scale;
+    // Big soft glow behind arrow
+    gfx.circle(pp.x, arrBase + arrH / 2 - arrStemH / 2, 22 * pp.scale).fill({ color: 0x00ccff, alpha: 0.18 * glowPulse });
+    // Shadow
+    gfx.poly([pp.x + 2, arrBase + arrH + 2, pp.x - arrW + 2, arrBase + 2, pp.x + arrW + 2, arrBase + 2])
+        .fill({ color: 0x000000, alpha: 0.6 });
+    gfx.rect(pp.x - arrStemW / 2 + 2, arrBase - arrStemH + 2, arrStemW, arrStemH)
+        .fill({ color: 0x000000, alpha: 0.6 });
+    // Arrow triangle (bright cyan)
+    gfx.poly([pp.x, arrBase + arrH, pp.x - arrW, arrBase, pp.x + arrW, arrBase])
+        .fill(0x00eeff);
+    // Stem
+    gfx.rect(pp.x - arrStemW / 2, arrBase - arrStemH, arrStemW, arrStemH)
+        .fill(0x00eeff);
+    // White highlight on arrow (inner shine)
+    gfx.poly([pp.x, arrBase + arrH - 4 * pp.scale, pp.x - arrW * 0.5, arrBase + 3 * pp.scale, pp.x + arrW * 0.5, arrBase + 3 * pp.scale])
+        .fill({ color: 0xffffff, alpha: 0.5 });
+    // Bold white border
+    gfx.poly([pp.x, arrBase + arrH, pp.x - arrW, arrBase, pp.x + arrW, arrBase])
+        .stroke({ width: Math.max(2, 3.5 * pp.scale), color: 0xffffff, alpha: 0.95 });
+    gfx.rect(pp.x - arrStemW / 2, arrBase - arrStemH, arrStemW, arrStemH)
+        .stroke({ width: Math.max(2, 3 * pp.scale), color: 0xffffff, alpha: 0.95 });
+
+    // Invincibility shield glow — golden dome over player
+    if (g.weapon === 'invincibility') {
+        const shieldPulse = Math.sin(now * 0.007) * 0.4 + 0.6;
+        const domeRx = auraRx * 1.5, domeRy = auraRy * 3 + 55 * pp.scale;
+        gfx.ellipse(pp.x, pp.y - 28 * pp.scale, domeRx, domeRy)
+            .fill({ color: 0xffdd44, alpha: 0.14 * shieldPulse });
+        gfx.ellipse(pp.x, pp.y - 28 * pp.scale, domeRx * 0.88, domeRy * 0.88)
+            .stroke({ width: Math.max(3, 5 * pp.scale), color: 0xffee44, alpha: 0.9 * shieldPulse });
+        // Spinning sparkle dots
+        for (let i = 0; i < 6; i++) {
+            const ang = (now * 0.005) + i * Math.PI / 3;
+            gfx.circle(
+                pp.x + Math.cos(ang) * domeRx,
+                pp.y - 28 * pp.scale + Math.sin(ang) * domeRy,
+                Math.max(2, 3 * pp.scale)
+            ).fill({ color: 0xffffff, alpha: 0.9 * shieldPulse });
+        }
+    }
+
+    // Draw player soldier (1.5x bigger than squad members)
+    drawPlayerSoldier(gfx, pp.x, pp.y, pp.scale * 1.5, g.player.animFrame);
 
     // Muzzle flash
     if (g.player.muzzleFlash > 0) {

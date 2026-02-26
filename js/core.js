@@ -50,6 +50,16 @@ function createGame() {
         enemyBullets: [],
         // Adaptive difficulty
         peakSquad: 3,
+        // Coin drops
+        coins: [],
+        coinsCollected: 0, // coins earned this run
+        // Gem drops (boss only)
+        gems: [],
+        gemsCollected: 0,
+        // Skill weapon (shop-purchased, manual activation via Space key)
+        skillWeapon: null,      // weapon key from SHOP_WEAPONS (set at game start if equipped)
+        skillCooldown: 0,       // ms remaining before skill can be used again
+        skillReady: true,       // true when skill can be activated
     };
 }
 
@@ -86,15 +96,32 @@ function generateClouds() {
 // 3D PROJECTION
 // ============================================================
 
+// Per-frame projection cache — avoids recalculating sqrt/aspect per entity
+const _proj = { viewDist: 200, horizonY: 0, groundY: 0, xScale: 1, sizeRef: 1, halfW: 0, isMobile: false };
+
+function updateProjectionCache() {
+    const aspect = screenW / screenH;
+    _proj.isMobile = aspect < 1;
+    _proj.viewDist = CONFIG.VIEW_DIST;
+    _proj.horizonY = screenH * CONFIG.HORIZON_RATIO;
+    _proj.groundY = screenH * 0.97;
+    _proj.xScale = screenW / (CONFIG.ROAD_HALF_WIDTH * 2.5);
+    _proj.sizeRef = 1.0;
+    _proj.halfW = screenW / 2;
+}
+
+function getHorizonRatio() {
+    const aspect = screenW / screenH;
+    return aspect < 1 ? CONFIG.HORIZON_RATIO + 0.06 : CONFIG.HORIZON_RATIO;
+}
+
 function project(worldX, relZ) {
-    const horizonY = screenH * CONFIG.HORIZON_RATIO;
-    const groundY = screenH * 0.97;
-    const scale = CONFIG.VIEW_DIST / (CONFIG.VIEW_DIST + Math.max(relZ, 0.1));
-    const xScale = screenW / (CONFIG.ROAD_HALF_WIDTH * 2.5);
+    const c = _proj;
+    const scale = c.viewDist / (c.viewDist + Math.max(relZ, 0.1));
     return {
-        x: screenW / 2 + worldX * scale * xScale,
-        y: horizonY + (groundY - horizonY) * scale,
-        scale: scale * Math.max(1, xScale * 0.7),
+        x: c.halfW + worldX * scale * c.xScale,
+        y: c.horizonY + (c.groundY - c.horizonY) * scale,
+        scale: scale * c.sizeRef,
     };
 }
 
@@ -172,9 +199,9 @@ function resetLabelPool() {
 
 // Monster sprite pool
 function getPooledMonsterSprite() {
-    if (!monsterFrames.length) return null;
+    if (!monsterSpritesLoaded) return null;
     if (monsterSpriteIdx >= monsterSpritePool.length) {
-        const spr = new PIXI.Sprite(monsterFrames[0]);
+        const spr = new PIXI.Sprite(normalMonsterFrames[0]);
         spr.anchor.set(0.5, 1); // Anchor at bottom center
         spr.visible = false;
         monsterSpriteContainer.addChild(spr);

@@ -4,30 +4,74 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Bridge Assault - 桥梁突击</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=23">
 <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.6.1/dist/pixi.min.js"></script>
 </head>
 <body>
 
 <div id="gameContainer"></div>
 
+<button id="pauseBtn">❚❚</button>
+
+<!-- Weapon slots: shown during gameplay, hidden on menu/gameover -->
+<div id="weaponSlots" style="display:none"></div>
+
 <div id="overlay">
     <h1>BRIDGE ASSAULT</h1>
     <h2>桥 梁 突 击</h2>
-    <button class="btn" id="startBtn">START GAME</button>
+    <div id="coinDisplay">
+        <span class="coin-icon">&#x1FA99;</span>
+        <span id="coinCount">0</span>
+        <span style="margin-left:14px;color:#cc44ff;">💎</span>
+        <span id="gemCount" style="color:#cc44ff;">0</span>
+    </div>
+    <div id="menuButtons">
+        <button class="btn" id="startBtn">START GAME</button>
+        <button class="btn btn-shop" id="shopBtn">SHOP</button>
+    </div>
+</div>
+
+<div id="shopOverlay" class="hidden">
+    <div id="shopPanel">
+        <div id="shopHeader">
+            <h2>SHOP</h2>
+            <div id="shopCurrencies">
+                <div id="shopCoins">🪙 <span id="shopCoinCount">0</span></div>
+                <div id="shopGems">💎 <span id="shopGemCount">0</span></div>
+            </div>
+        </div>
+        <div id="shopTabs">
+            <button class="shop-tab active" data-tab="weapon">⚔️ 武器</button>
+            <button class="shop-tab" data-tab="defense">🛡️ 防具</button>
+            <button class="shop-tab" data-tab="talent">💎 天赋</button>
+        </div>
+        <div id="shopWeaponPanel">
+            <div id="shopItems"></div>
+            <div id="equippedInfo"></div>
+        </div>
+        <div id="shopDefensePanel" style="display:none">
+            <div id="defenseItems"></div>
+            <div id="defenseInfo"></div>
+        </div>
+        <div id="shopTalentPanel" style="display:none">
+            <div id="talentItems"></div>
+            <div class="talent-hint" style="margin-top:min(14px,2vh)">💎 宝石由 Boss 随机掉落，用于永久提升角色属性</div>
+        </div>
+        <button class="btn btn-back" id="shopBackBtn">BACK</button>
+    </div>
 </div>
 
 <!-- Game modules (order matters: dependencies first) -->
-<script src="js/config.js"></script>
-<script src="js/globals.js"></script>
-<script src="js/audio.js"></script>
-<script src="js/core.js"></script>
-<script src="js/spawn.js"></script>
-<script src="js/combat.js"></script>
-<script src="js/draw.js"></script>
-<script src="js/hud.js"></script>
-<script src="js/update.js"></script>
-<script src="js/render.js"></script>
-<script src="js/main.js"></script>
+<script src="js/config.js?v=23"></script>
+<script src="js/globals.js?v=23"></script>
+<script src="js/audio.js?v=23"></script>
+<script src="js/core.js?v=23"></script>
+<script src="js/spawn.js?v=23"></script>
+<script src="js/combat.js?v=23"></script>
+<script src="js/draw.js?v=23"></script>
+<script src="js/hud.js?v=23"></script>
+<script src="js/update.js?v=23"></script>
+<script src="js/render.js?v=23"></script>
+<script src="js/main.js?v=23"></script>
 </body>
 </html>

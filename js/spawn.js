@@ -8,23 +8,42 @@ function spawnEnemyWave() {
     const count = Math.min(3 + Math.ceil(g.wave * 1.5), 25);
     const rows = Math.ceil(count / 5);
     const baseZ = g.cameraZ + CONFIG.SPAWN_DISTANCE;
-    // Damage scales with wave × adaptive factor
-    const baseDmg = Math.ceil((1 + Math.floor(g.wave / 5)) * Math.sqrt(af));
+    // Damage scales with wave × adaptive factor; early waves deal less damage
+    // 后期伤害增长更平缓：对数增长 + 软封顶
+    const earlyDmgMult = g.wave <= 2 ? 0.5 : 1.0;
+    const rawDmg = (1 + Math.floor(g.wave / 5)) * Math.sqrt(af) * earlyDmgMult;
+    // 软封顶：超过3后增长变缓（对数衰减），后期伤害更温和
+    const baseDmg = rawDmg <= 3 ? Math.ceil(rawDmg) : Math.ceil(3 + Math.log2(rawDmg - 2));
     for (let r = 0; r < rows; r++) {
         const cols = Math.min(count - r * 5, 5);
         for (let c = 0; c < cols; c++) {
             const spread = CONFIG.ROAD_HALF_WIDTH * 0.7;
             const x = cols === 1 ? 0 : -spread + (spread * 2) * c / (cols - 1);
-            // HP scales with wave × adaptive factor
+            // HP scales with wave × adaptive factor; early waves get a soft start
+            const earlyMult = g.wave <= 2 ? 0.5 : 1.0;
             const rawHp = CONFIG.ENEMY_HP + g.wave + Math.floor(g.wave * g.wave / 40);
-            const baseHp = Math.ceil(rawHp * af);
+            const baseHp = Math.ceil(rawHp * af * earlyMult);
             // Heavy enemies: chance also scaled by adaptive factor
             const heavyChance = g.wave >= 6 ? (0.12 + g.wave * 0.006) * Math.min(1.5, af) : 0;
             const isHeavy = Math.random() < heavyChance;
-            const type = Math.floor(Math.random() * 3);
-            const typeMult = type === 1 ? 1.5 : 1.0; // red enemies are tougher
-            const hp = Math.ceil((isHeavy ? baseHp * 2 : baseHp) * 1.2 * typeMult);
-            const damage = Math.ceil((isHeavy ? baseDmg * 1.5 : baseDmg) * 1.2);
+            // 兵种概率按层级分布，低级高概率、高级低概率，随wave递变
+            // type0/2: 派大星(普通), type1: 小奶龙(中级), type3: 火焰奶龙(高级)
+            const w = g.wave;
+            const wt0 = Math.max(2, 10 - w * 0.3);       // 普通兵：前期主力，逐渐减少
+            const wt2 = Math.max(2, 10 - w * 0.3);       // 派大星变种：同上
+            const wt1 = w >= 3 ? Math.min(6, 1 + w * 0.3) : 0;  // 小奶龙：wave3+出现，逐步增多
+            const wt3 = w > 10 ? Math.min(4, (w - 10) * 0.25) : 0; // 火焰奶龙：wave10+出现，缓慢增长
+            const wtTotal = wt0 + wt1 + wt2 + wt3;
+            const roll = Math.random() * wtTotal;
+            let type;
+            if (roll < wt0) type = 0;
+            else if (roll < wt0 + wt2) type = 2;
+            else if (roll < wt0 + wt2 + wt1) type = 1;
+            else type = 3;
+            const hpTypeMult = type === 1 ? 2.0 : type === 3 ? 3.5 : 1.0;
+            const dmgTypeMult = type === 1 ? 1.4 : type === 3 ? 2.5 : 1.0;
+            const hp = Math.ceil((isHeavy ? baseHp * 2 : baseHp) * 1.38 * hpTypeMult);
+            const damage = Math.ceil((isHeavy ? baseDmg * 1.5 : baseDmg) * 1.0 * dmgTypeMult);
             g.enemies.push({
                 x: x + (Math.random() - 0.5) * 20,
                 z: baseZ + r * 45 + Math.random() * 15,
@@ -41,63 +60,103 @@ function spawnEnemyWave() {
 function spawnBoss(z) {
     const g = game;
     const bossLevel = Math.floor(g.wave / 5); // 1, 2, 3...
-    // Boss HP: gentler early scaling so first boss is beatable
+
+    // Boss count grows every 2 levels: 1,1,2,2,3,3,4,4...  (cap at 4)
+    const bossCount = Math.min(1 + Math.floor((bossLevel - 1) / 2), 4);
+
+    // Per-boss stat reduction: more bosses = individually weaker
+    // 1→100%  2→72%  3→58%  4→50%
+    const statMult = bossCount === 1 ? 1.0 : Math.max(0.45, 1.0 / Math.sqrt(bossCount * 0.85));
+
     const bulletCount = Math.min(g.squadCount, 8);
     const bulletDmg = 1 + Math.floor(g.squadCount / 6);
     const volleyDmg = bulletCount * bulletDmg;
-    const bossHp = Math.max(40, Math.ceil(volleyDmg * (12 + bossLevel * 5)));
     const af = getAdaptiveFactor();
-    const baseDmg = 1 + Math.floor(g.wave / 8);
-    const bossDmg = Math.ceil(baseDmg * Math.sqrt(af));
-    g.enemies.push({
-        x: (Math.random() - 0.5) * CONFIG.ROAD_HALF_WIDTH * 0.6,
-        z,
-        hp: bossHp, maxHp: bossHp, alive: true,
-        damage: bossDmg,
-        isBoss: true, isHeavy: false,
-        // Boss AI state — stays at far range, never advances
-        bossShootTimer: 0,
-        bossShootInterval: Math.max(60, 160 - bossLevel * 15),
-        bossHoldZ: CONFIG.SPAWN_DISTANCE - 60, // stay near max visible range
-        animFrame: 0, animTimer: Math.random() * 500, hitFlash: 0,
-        type: 0,
-    });
+    const baseDmg = 1 + Math.floor(g.wave / 6);
+
+    // Shoot interval: each boss fires a bit slower to keep total fire rate manageable
+    const baseInterval = Math.max(55, 160 - bossLevel * 15);
+    const shootInterval = Math.round(baseInterval * (1 + (bossCount - 1) * 0.2));
+
+    // Spread bosses evenly across road (wider spread with more bosses)
+    const xSpread = CONFIG.ROAD_HALF_WIDTH * (bossCount > 1 ? 0.85 : 0.6);
+
+    for (let i = 0; i < bossCount; i++) {
+        let bx;
+        if (bossCount === 1) {
+            bx = (Math.random() - 0.5) * xSpread;
+        } else {
+            const t = i / (bossCount - 1); // 0..1 evenly spaced
+            bx = -xSpread / 2 + t * xSpread + (Math.random() - 0.5) * 18;
+        }
+        const bossHp = Math.max(20, Math.ceil(volleyDmg * (12 + bossLevel * 5) * statMult));
+        // 多boss时单个boss伤害+10%补偿
+        const multiBossDmgMult = bossCount > 1 ? 1.1 : 1.0;
+        const bossDmg = Math.max(1, Math.ceil(baseDmg * Math.sqrt(af) * statMult * multiBossDmgMult));
+        const zOffset = bossCount > 1 ? (Math.random() - 0.5) * 55 : 0;
+
+        g.enemies.push({
+            x: bx,
+            z: z + zOffset,
+            hp: bossHp, maxHp: bossHp, alive: true,
+            damage: bossDmg,
+            isBoss: true, isHeavy: false,
+            bossShootTimer: Math.floor(Math.random() * shootInterval), // stagger initial shots
+            bossShootInterval: shootInterval,
+            bossHoldZ: CONFIG.SPAWN_DISTANCE,
+            animFrame: 0, animTimer: Math.random() * 500, hitFlash: 0,
+            type: 0,
+        });
+    }
 }
 
 // PERCENT_GATE_THRESHOLD is defined in config.js
 
 function generateTroopGateOption(wave, squad, idx, total) {
     const pool = [];
-    // Fixed addition: always available
-    const addVal = 2 + Math.floor(Math.random() * 2) + Math.floor(wave / 4);
-    pool.push({ op: '+', value: addVal, w: 3 });
-    // Fixed subtraction: always available
-    const subVal = 1 + Math.floor(Math.random() * Math.min(3, Math.ceil(wave / 5)));
-    pool.push({ op: '-', value: subVal, w: 2 });
+
+    // === 加法增益：前期加少，后期加多；小增益大概率，大增益小概率 ===
+    const waveBonus = Math.floor(wave / 5); // 每5波基础值+1
+    // 小加: +1~3 + waveBonus, 高权重（常见）
+    pool.push({ op: '+', value: 1 + Math.floor(Math.random() * 3) + waveBonus, w: 5 });
+    // 中加: +4~6 + waveBonus, wave3+解锁, 中等权重
+    if (wave >= 3) {
+        pool.push({ op: '+', value: 4 + Math.floor(Math.random() * 3) + waveBonus, w: 2.5 });
+    }
+    // 大加: +7~12 + waveBonus*2, wave8+解锁, 低权重（稀有）
+    if (wave >= 8) {
+        pool.push({ op: '+', value: 7 + Math.floor(Math.random() * 6) + waveBonus * 2, w: 0.8 });
+    }
+
+    // === 减法惩罚：小减大概率，大减小概率 ===
+    pool.push({ op: '-', value: 1 + Math.floor(Math.random() * 2), w: 5 });   // -1~2 常见
+    if (wave >= 4) {
+        pool.push({ op: '-', value: 3 + Math.floor(Math.random() * 3), w: 1.0 }); // -3~5 稀有
+    }
 
     if (squad < PERCENT_GATE_THRESHOLD) {
-        // Small squad: multipliers are the comeback mechanic
+        // 小队伍：乘法作为翻盘机制
         if (wave >= 3) {
-            pool.push({ op: '×', value: 2, w: 1.2 });
-            if (wave >= 8) pool.push({ op: '×', value: 3, w: 0.4 });
+            pool.push({ op: '×', value: 2, w: 1.0 });    // ×2 偶尔出现
+            if (wave >= 10) pool.push({ op: '×', value: 3, w: 0.2 }); // ×3 非常稀有
         }
         if (wave >= 4) {
-            pool.push({ op: '÷', value: 2, w: 1.5 });
-            if (wave >= 8) pool.push({ op: '÷', value: 3, w: 0.6 });
+            pool.push({ op: '÷', value: 2, w: 1.2 });
+            if (wave >= 10) pool.push({ op: '÷', value: 3, w: 0.3 });
         }
     } else {
-        // Large squad: percentage gates for stable scaling
-        const goodPcts = [15, 20];
-        if (wave >= 6) goodPcts.push(25);
-        if (wave >= 12) goodPcts.push(30);
-        const gp = goodPcts[Math.floor(Math.random() * goodPcts.length)];
-        pool.push({ op: '+%', value: gp, w: 1.5 });
-
-        const badPcts = [10, 15];
-        if (wave >= 8) badPcts.push(20);
-        if (wave >= 15) badPcts.push(25);
-        const bp = badPcts[Math.floor(Math.random() * badPcts.length)];
-        pool.push({ op: '-%', value: bp, w: 1.2 });
+        // 大队伍：百分比门，大百分比小概率
+        // 小百分比增益: +10~15%, 较常见
+        pool.push({ op: '+%', value: 10 + Math.floor(Math.random() * 6), w: 2.0 });
+        // 大百分比增益: +20~30%, wave8+, 稀有
+        if (wave >= 8) {
+            pool.push({ op: '+%', value: 20 + Math.floor(Math.random() * 11), w: 0.6 });
+        }
+        // 百分比惩罚
+        pool.push({ op: '-%', value: 10 + Math.floor(Math.random() * 6), w: 1.5 });
+        if (wave >= 10) {
+            pool.push({ op: '-%', value: 20 + Math.floor(Math.random() * 6), w: 0.5 });
+        }
     }
 
     // Weighted random pick
@@ -120,14 +179,16 @@ function isGoodOption(opt, squad) {
 
 function generateBadOption(wave, squad) {
     if (squad >= PERCENT_GATE_THRESHOLD) {
-        const pcts = [10, 15];
-        if (wave >= 8) pcts.push(20);
-        return { op: '-%', value: pcts[Math.floor(Math.random() * pcts.length)] };
+        // 小百分比惩罚更常见
+        const roll = Math.random();
+        if (wave >= 10 && roll < 0.2) return { op: '-%', value: 20 + Math.floor(Math.random() * 6) };
+        return { op: '-%', value: 10 + Math.floor(Math.random() * 6) };
     }
-    const badPool = [{ op: '-', value: 1 + Math.floor(Math.random() * Math.min(3, Math.ceil(wave / 4))) }];
-    if (wave >= 4) badPool.push({ op: '÷', value: 2 });
-    if (wave >= 8) badPool.push({ op: '÷', value: 3 });
-    return badPool[Math.floor(Math.random() * badPool.length)];
+    // 小减法更常见，大减法和除法稀有
+    const roll = Math.random();
+    if (wave >= 8 && roll < 0.1) return { op: '÷', value: 3 };
+    if (wave >= 4 && roll < 0.3) return { op: '÷', value: 2 };
+    return { op: '-', value: 1 + Math.floor(Math.random() * Math.min(3, Math.ceil(wave / 5))) };
 }
 
 function applyTroopGateOp(squad, op, value) {
@@ -145,23 +206,32 @@ function applyTroopGateOp(squad, op, value) {
 function spawnGate() {
     const g = game;
     const z = g.nextGateZ;
-    const numOptions = Math.random() < 0.3 ? 2 : 3; // 30% chance of 2 panels
-    const isWeaponGate = g.wave % 2 === 0 && g.wave >= 2;
+    // Mobile: always 2 panels to avoid cramping; desktop: 2 or 3
+    const isMobile = _proj.isMobile;
+    const numOptions = isMobile ? 2 : (Math.random() < 0.3 ? 2 : 3);
+    const isWeaponGate = g.wave % 2 === 0 && g.wave >= 2 && Math.random() < 0.7; // 70% of even waves → -30%
     const options = [];
 
     // Generate random panel widths and positions
+    // 随机决定布局：~40%概率有可通行空隙，~60%概率挤满路面
     const roadW = CONFIG.ROAD_HALF_WIDTH * 2;
-    // Each panel gets a random width factor
+    const hasPassableGaps = Math.random() < 0.4;
+    const minGap = hasPassableGaps ? 30 : 0; // 有空隙时至少30单位可通行
     const widthFactors = [];
     for (let i = 0; i < numOptions; i++) {
         widthFactors.push(0.7 + Math.random() * 0.6); // 0.7 ~ 1.3x variation
     }
     const factorSum = widthFactors.reduce((s, f) => s + f, 0);
-    const usableWidth = roadW * 0.82; // leave margins
+    // 有空隙时面板占55-65%，挤满时占80-85%
+    const usableRatio = hasPassableGaps ? (0.55 + Math.random() * 0.1) : (0.80 + Math.random() * 0.05);
+    const usableWidth = roadW * usableRatio;
     const panelWidths = widthFactors.map(f => (f / factorSum) * usableWidth);
 
-    // Random gaps between panels and edges
-    const gapSlack = roadW - panelWidths.reduce((s, w) => s + w, 0);
+    const totalPanelW = panelWidths.reduce((s, w) => s + w, 0);
+    const totalGapSpace = roadW - totalPanelW;
+    const innerGapCount = Math.max(0, numOptions - 1);
+    const reservedGap = innerGapCount * minGap;
+    const freeGap = Math.max(0, totalGapSpace - reservedGap);
     const gaps = [];
     let gapSum = 0;
     for (let i = 0; i <= numOptions; i++) {
@@ -173,7 +243,7 @@ function spawnGate() {
     const positions = [];
     let curX = -CONFIG.ROAD_HALF_WIDTH;
     for (let i = 0; i < numOptions; i++) {
-        curX += (gaps[i] / gapSum) * gapSlack;
+        curX += (gaps[i] / gapSum) * freeGap + (i > 0 ? minGap : 0);
         positions.push({ cx: curX + panelWidths[i] / 2, w: panelWidths[i] });
         curX += panelWidths[i];
     }
@@ -207,10 +277,9 @@ function spawnGate() {
         for (let i = 0; i < numOptions; i++) {
             troopOps.push(generateTroopGateOption(g.wave, g.squadCount, i, numOptions));
         }
+        // 保证至少一个好门；允许多个坏门同列出现
         const hasGood = troopOps.some(o => isGoodOption(o, g.squadCount));
-        const hasBad = troopOps.some(o => !isGoodOption(o, g.squadCount));
         if (!hasGood) troopOps[0] = { op: '+', value: 2 + Math.floor(g.wave / 4) };
-        if (!hasBad) troopOps[numOptions - 1] = generateBadOption(g.wave, g.squadCount);
         for (let i = troopOps.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [troopOps[i], troopOps[j]] = [troopOps[j], troopOps[i]];
