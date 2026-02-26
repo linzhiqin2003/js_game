@@ -130,13 +130,13 @@ function explodeBarrel(br) {
             e.hitFlash = 6;
             addDamageNumber(e.x, e.z, br.aoeDamage, 0xff8800);
             if (e.hp <= 0) {
-                const killScore = e.isBoss ? 100 : e.isHeavy ? 25 : 10;
+                const killScore = e.isMegaBoss ? 300 : e.isBoss ? 100 : e.isHeavy ? 25 : 10;
                 e.alive = false; g.score += killScore; g.killCount++;
                 addExplosion(e.x, e.z);
                 g.deadBodies.push({ x: e.x, z: e.z, timer: 300 });
                 g.comboCount++; g.comboTimer = CONFIG.COMBO_TIMEOUT;
                 g.bestCombo = Math.max(g.bestCombo, g.comboCount);
-                if (e.isBoss) spawnBossCoins(e.x, e.z);
+                if (e.isBoss) { spawnBossCoins(e.x, e.z); if (e.isMegaBoss) spawnBossCoins(e.x, e.z); }
             }
         }
     });

@@ -118,26 +118,30 @@ function drawBossHud() {
     const boxW = barW + boxPad * 2;
     const boxH = mainBarH + 38 + (bossCount > 1 ? miniBarH + miniBarGap + 4 : 0);
 
+    const hasMega = bosses.some(b => b.isMegaBoss);
+
     // Outer glow pulse
     const glowPulse = Math.sin(now * 0.004) * 0.5 + 0.5;
-    const glowAlpha = hpRatio < 0.3 ? 0.2 + glowPulse * 0.15 : 0.08 + glowPulse * 0.06;
-    const glowColor = hpRatio < 0.3 ? 0xff2222 : 0xcc44ff;
+    const glowAlpha = hpRatio < 0.3 ? 0.2 + glowPulse * 0.15 : hasMega ? 0.15 + glowPulse * 0.1 : 0.08 + glowPulse * 0.06;
+    const glowColor = hpRatio < 0.3 ? 0xff2222 : hasMega ? 0xff4400 : 0xcc44ff;
     bossHudGfx.roundRect(boxX - 4, boxY - 4, boxW + 8, boxH + 8, 12)
         .fill({ color: glowColor, alpha: glowAlpha });
 
     // Background panel
     bossHudGfx.roundRect(boxX, boxY, boxW, boxH, 8)
-        .fill({ color: 0x0a0a18, alpha: 0.8 });
+        .fill({ color: hasMega ? 0x180808 : 0x0a0a18, alpha: 0.8 });
+    const borderColor = hasMega ? 0xff4400 : 0xcc66ff;
     bossHudGfx.roundRect(boxX, boxY, boxW, boxH, 8)
-        .stroke({ width: 2, color: 0xcc66ff, alpha: 0.5 });
+        .stroke({ width: hasMega ? 3 : 2, color: borderColor, alpha: 0.5 });
     bossHudGfx.roundRect(boxX + 2, boxY + 2, boxW - 4, boxH - 4, 6)
         .stroke({ width: 1, color: 0xffffff, alpha: 0.08 });
 
     // Corner diamonds
     const dSize = 4;
+    const diamondColor = hasMega ? 0xff4400 : 0xcc66ff;
     [boxX + 8, boxX + boxW - 8].forEach(dx => {
         bossHudGfx.poly([dx, boxY - 1, dx + dSize, boxY + dSize, dx, boxY + dSize * 2, dx - dSize, boxY + dSize])
-            .fill({ color: 0xcc66ff, alpha: 0.7 });
+            .fill({ color: diamondColor, alpha: 0.7 });
     });
 
     // ── Main combined HP bar ──
@@ -148,7 +152,8 @@ function drawBossHud() {
 
     if (hpRatio > 0) {
         const fillW = Math.max(6, barW * hpRatio);
-        const fillColor = hpRatio > 0.5 ? 0xcc44ff : hpRatio > 0.25 ? 0xff6644 : 0xff2222;
+        const fillColor = hasMega ? (hpRatio > 0.5 ? 0xff4400 : hpRatio > 0.25 ? 0xff6644 : 0xff2222)
+            : (hpRatio > 0.5 ? 0xcc44ff : hpRatio > 0.25 ? 0xff6644 : 0xff2222);
         bossHudGfx.roundRect(barX, barY, fillW, mainBarH, 4).fill(fillColor);
         bossHudGfx.roundRect(barX + 2, barY + 2, fillW - 4, mainBarH * 0.35, 2)
             .fill({ color: 0xffffff, alpha: 0.28 });
@@ -186,7 +191,14 @@ function drawBossHud() {
 
     // Name label
     const countTag = bossCount > 1 ? ` ×${bossCount}` : '';
-    bossHudNameText.text = `大奶龙${countTag}` + (bossLevel >= 3 ? ` Lv.${bossLevel}` : '');
+    if (hasMega) {
+        const megaLevel = Math.floor(g.wave / 10);
+        bossHudNameText.text = `🔥 大龙王 Lv.${megaLevel}`;
+        bossHudNameText.style.fill = 0xff4400;
+    } else {
+        bossHudNameText.text = `大奶龙${countTag}` + (bossLevel >= 3 ? ` Lv.${bossLevel}` : '');
+        bossHudNameText.style.fill = 0xcc66ff;
+    }
     bossHudNameText.x = screenW / 2;
     bossHudNameText.y = barY - 2;
 
@@ -231,7 +243,16 @@ function drawWaveBanner() {
     // Show adaptive difficulty as tactical info
     const af = getAdaptiveFactor();
     const afLabel = af >= 1.15 ? ` | 强度 ×${af.toFixed(1)}` : af <= 0.85 ? ` | 强度 ×${af.toFixed(1)}` : '';
-    waveBannerSub.text = `INCOMING!${afLabel}`;
+    if (wb.wave % 10 === 0) {
+        waveBannerSub.text = `🔥 大龙王来袭! ${afLabel}`;
+        waveBannerSub.style.fill = 0xff4400;
+    } else if (wb.wave % 5 === 0) {
+        waveBannerSub.text = `BOSS 来袭!${afLabel}`;
+        waveBannerSub.style.fill = 0xcc66ff;
+    } else {
+        waveBannerSub.text = `INCOMING!${afLabel}`;
+        waveBannerSub.style.fill = 0xcccccc;
+    }
 }
 
 // ============================================================

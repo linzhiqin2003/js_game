@@ -91,13 +91,13 @@ function render() {
                         let frameH = e.isBoss ? MONSTER_FRAME_SIZE
                             : e.type === 1 ? XIAO_NAI_LONG_FRAME_SIZE
                             : e.type === 3 ? FIRE_ENEMY_FRAME_SIZE : PATRICK_FRAME_H;
-                        let sizeMult = e.isBoss ? 4.2 : e.isHeavy ? 1.6
+                        let sizeMult = e.isMegaBoss ? 7.0 : e.isBoss ? 4.2 : e.isHeavy ? 1.6
                             : e.type === 1 ? 1.4 : e.type === 3 ? 2.2 : 1.3;
                         const sprScale = p.scale * (TARGET_H / frameH) * sizeMult;
                         const wobble = Math.sin(e.animFrame * 0.15) * 0.02 * sprScale;
                         spr.scale.set(sprScale + wobble, sprScale - wobble);
                         // Tint: hit flash; fire elite gets red tint since fire bg was removed
-                        spr.tint = e.hitFlash > 0 ? 0xffaaaa : e.type === 3 ? 0xff5533 : 0xffffff;
+                        spr.tint = e.hitFlash > 0 ? 0xffaaaa : e.isMegaBoss ? 0xff2222 : e.type === 3 ? 0xff5533 : 0xffffff;
                         spr.alpha = 1;
                         spr.zIndex = -relZ;
                     }
@@ -106,21 +106,21 @@ function render() {
                 }
                 // HP bar: always for boss/heavy/fire elite, otherwise when damaged
                 if (e.hp < e.maxHp || e.isHeavy || e.isBoss || e.type === 3) {
-                    const barSizeMult = e.isBoss ? 3.5 : e.type === 3 ? 1.8 : e.isHeavy ? 1.35 : 1;
-                    const barW = (e.isBoss ? 65 : e.type === 3 ? 32 : e.isHeavy ? 26 : 20) * p.scale;
-                    const barH = Math.max(1, (e.isBoss ? 5 : 3) * p.scale);
+                    const barSizeMult = e.isMegaBoss ? 5.0 : e.isBoss ? 3.5 : e.type === 3 ? 1.8 : e.isHeavy ? 1.35 : 1;
+                    const barW = (e.isMegaBoss ? 90 : e.isBoss ? 65 : e.type === 3 ? 32 : e.isHeavy ? 26 : 20) * p.scale;
+                    const barH = Math.max(1, (e.isMegaBoss ? 7 : e.isBoss ? 5 : 3) * p.scale);
                     const barY = p.y - 18 * p.scale * barSizeMult;
                     entityGfx.rect(p.x - barW / 2, barY, barW, barH).fill(0x440000);
-                    const barColor = e.isBoss ? 0xcc44ff : e.type === 3 ? 0xff6622 : e.isHeavy ? 0xff6666 : 0xff4444;
+                    const barColor = e.isMegaBoss ? 0xff2222 : e.isBoss ? 0xcc44ff : e.type === 3 ? 0xff6622 : e.isHeavy ? 0xff6666 : 0xff4444;
                     entityGfx.rect(p.x - barW / 2, barY, barW * (e.hp / e.maxHp), barH).fill(barColor);
                     // Boss: label above HP bar
                     if (e.isBoss) {
                         const bossLabel = getPooledLabel();
-                        bossLabel.text = '大奶龙';
-                        bossLabel.style.fontSize = Math.max(12, Math.floor(18 * p.scale));
-                        bossLabel.style.fill = 0xcc66ff;
+                        bossLabel.text = e.isMegaBoss ? '🔥 大龙王' : '大奶龙';
+                        bossLabel.style.fontSize = Math.max(12, Math.floor((e.isMegaBoss ? 22 : 18) * p.scale));
+                        bossLabel.style.fill = e.isMegaBoss ? 0xff4444 : 0xcc66ff;
                         bossLabel.anchor.set(0.5);
-                        bossLabel.x = p.x; bossLabel.y = barY - 10 * p.scale;
+                        bossLabel.x = p.x; bossLabel.y = barY - (e.isMegaBoss ? 14 : 10) * p.scale;
                         bossLabel.alpha = 1;
                         bossLabel.visible = true;
                     }
@@ -130,7 +130,22 @@ if (e.isHeavy && !e.isBoss) {
                     }
                 }
                 // Boss: pulsing aura glow
-                if (e.isBoss) {
+                if (e.isMegaBoss) {
+                    // Mega boss: large fiery red aura with multiple rings
+                    const pulse = Math.sin(Date.now() * 0.005) * 0.15 + 0.3;
+                    const auraR = 50 * p.scale;
+                    entityGfx.circle(p.x, p.y, auraR * 1.5).fill({ color: 0xff2200, alpha: pulse * 0.15 });
+                    entityGfx.circle(p.x, p.y, auraR).fill({ color: 0xff4400, alpha: pulse });
+                    entityGfx.circle(p.x, p.y, auraR * 0.6).fill({ color: 0xff8800, alpha: pulse * 0.6 });
+                    // Flickering fire particles around mega boss
+                    const now = Date.now();
+                    for (let fi = 0; fi < 4; fi++) {
+                        const fAngle = (now * 0.003) + fi * Math.PI / 2;
+                        const fx = p.x + Math.cos(fAngle) * auraR * 0.9;
+                        const fy = p.y + Math.sin(fAngle) * auraR * 0.4;
+                        entityGfx.circle(fx, fy, Math.max(2, 4 * p.scale)).fill({ color: 0xff6600, alpha: pulse * 0.7 });
+                    }
+                } else if (e.isBoss) {
                     const pulse = Math.sin(Date.now() * 0.004) * 0.15 + 0.25;
                     const auraR = 30 * p.scale;
                     entityGfx.circle(p.x, p.y, auraR).fill({ color: 0x9933ff, alpha: pulse });
@@ -209,20 +224,31 @@ if (e.isHeavy && !e.isBoss) {
         const relZ = eb.z - g.cameraZ;
         if (relZ < -10 || relZ > CONFIG.SPAWN_DISTANCE + 100) return;
         const ep = project(eb.x, relZ);
-        const s = Math.max(3, 7 * ep.scale);
+        const isFlame = eb.type === 'flame';
+        const s = Math.max(3, (isFlame ? 9 : 7) * ep.scale);
 
         // Trail
         const trailP = project(eb.x - eb.vx * 3, relZ - eb.vz * 3);
         if (trailP.scale > 0) {
             entityGfx.moveTo(trailP.x, trailP.y).lineTo(ep.x, ep.y)
-                .stroke({ width: Math.max(2, s * 1.0), color: eb.color, alpha: 0.5 });
+                .stroke({ width: Math.max(2, s * (isFlame ? 1.4 : 1.0)), color: eb.color, alpha: isFlame ? 0.7 : 0.5 });
         }
         // Outer warning glow
-        entityGfx.circle(ep.x, ep.y, s * 3.5).fill({ color: eb.color, alpha: 0.12 });
+        entityGfx.circle(ep.x, ep.y, s * 3.5).fill({ color: eb.color, alpha: isFlame ? 0.18 : 0.12 });
         entityGfx.circle(ep.x, ep.y, s * 2).fill({ color: eb.color, alpha: 0.3 });
         // Core
         entityGfx.circle(ep.x, ep.y, s).fill({ color: eb.color, alpha: 0.95 });
-        entityGfx.circle(ep.x, ep.y, s * 0.45).fill({ color: 0xffffff, alpha: 0.9 });
+        entityGfx.circle(ep.x, ep.y, s * 0.45).fill({ color: isFlame ? 0xffee44 : 0xffffff, alpha: 0.9 });
+        // Flame particles trail
+        if (isFlame && Math.random() < 0.3) {
+            game.particles.push({
+                x: eb.x + (Math.random() - 0.5) * 4, z: eb.z,
+                vx: (Math.random() - 0.5) * 0.5, vz: 0.1,
+                vy: -0.8 - Math.random() * 0.4, y: 0,
+                life: 6 + Math.random() * 4, maxLife: 10,
+                color: Math.random() < 0.5 ? 0xff6600 : 0xffaa00, size: 1.5 + Math.random() * 2,
+            });
+        }
 
         // Ground warning: project bullet trajectory to player's Z plane
         if (eb.vz < 0 && relZ > 5) {

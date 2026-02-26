@@ -110,6 +110,46 @@ function spawnBoss(z) {
     }
 }
 
+function spawnMegaBoss(z) {
+    const g = game;
+    const megaLevel = Math.floor(g.wave / 10); // 1, 2, 3...
+    const af = getAdaptiveFactor();
+
+    // Mega boss is a single, very powerful boss
+    const bulletCount = Math.min(g.squadCount, 8);
+    const bulletDmg = 1 + Math.floor(g.squadCount / 6);
+    const volleyDmg = bulletCount * bulletDmg;
+    const baseDmg = 2 + Math.floor(g.wave / 4); // higher base damage than regular boss
+
+    // Much higher HP — scales with volley damage and mega level
+    const megaHp = Math.max(60, Math.ceil(volleyDmg * (25 + megaLevel * 12)));
+
+    // Damage per shot — strong but fair
+    const megaDmg = Math.max(2, Math.ceil(baseDmg * Math.sqrt(af) * 1.3));
+
+    // Slower shoot interval but fires skill attacks between shots
+    const shootInterval = Math.max(80, 180 - megaLevel * 12);
+
+    g.enemies.push({
+        x: 0,
+        z: z,
+        hp: megaHp, maxHp: megaHp, alive: true,
+        damage: megaDmg,
+        isBoss: true, isMegaBoss: true, isHeavy: false,
+        bossShootTimer: 0,
+        bossShootInterval: shootInterval,
+        bossHoldZ: CONFIG.SPAWN_DISTANCE,
+        animFrame: 0, animTimer: Math.random() * 500, hitFlash: 0,
+        type: 0,
+        // Mega boss skill system
+        megaSkillTimer: 0,
+        megaSkillCooldown: Math.max(180, 350 - megaLevel * 25), // ticks between skills
+        megaNextSkill: 0, // 0=flame breath, 1=summon, 2=ground slam
+        megaLevel: megaLevel,
+        megaSummonCount: 0, // track summons to limit
+    });
+}
+
 // PERCENT_GATE_THRESHOLD is defined in config.js
 
 function generateTroopGateOption(wave, squad, idx, total) {

@@ -56,6 +56,8 @@ function createGame() {
         // Gem drops (boss only)
         gems: [],
         gemsCollected: 0,
+        // Mega boss tracking
+        megaBossWarningShown: false,
         // Skill weapon (shop-purchased, manual activation via Space key)
         skillWeapon: null,      // weapon key from SHOP_WEAPONS (set at game start if equipped)
         skillCooldown: 0,       // ms remaining before skill can be used again

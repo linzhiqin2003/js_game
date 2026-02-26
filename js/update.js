@@ -111,12 +111,13 @@ function update(dt) {
                             const aoeDmg = Math.max(1, Math.floor((b.damage || 1) * falloff));
                             other.hp -= aoeDmg; other.hitFlash = 4;
                             if (other.hp <= 0) {
-                                const ks = other.isBoss ? 100 : other.isHeavy ? 25 : 10;
+                                const ks = other.isMegaBoss ? 300 : other.isBoss ? 100 : other.isHeavy ? 25 : 10;
                                 other.alive = false; g.score += ks; g.killCount++;
                                 addExplosion(other.x, other.z);
                                 g.deadBodies.push({ x: other.x, z: other.z, timer: 300 });
                                 if (other.isBoss) {
                             spawnBossCoins(other.x, other.z); spawnBossGems(other.x, other.z);
+                            if (other.isMegaBoss) spawnBossCoins(other.x, other.z); // mega boss double coins
                             const stillBossAlive = g.enemies.some(o => o !== other && o.alive && o.isBoss);
                             if (!stillBossAlive) g.enemyBullets = [];
                         }
@@ -126,7 +127,7 @@ function update(dt) {
                 } else { b.dead = true; }
 
                 if (e.hp <= 0) {
-                    const killScore = e.isBoss ? 100 : e.isHeavy ? 25 : 10;
+                    const killScore = e.isMegaBoss ? 300 : e.isBoss ? 100 : e.isHeavy ? 25 : 10;
                     e.alive = false; g.score += killScore; g.killCount++;
                     g.comboCount++; g.comboTimer = CONFIG.COMBO_TIMEOUT;
                     if (g.comboCount > g.bestCombo) g.bestCombo = g.comboCount;
@@ -134,7 +135,24 @@ function update(dt) {
                     g.deadBodies.push({ x: e.x, z: e.z, timer: 300 });
                     playSound('explosion');
                     const ep = project(e.x, e.z - g.cameraZ);
-                    if (e.isBoss) {
+                    if (e.isMegaBoss) {
+                        // Mega boss death: massive explosion cascade
+                        for (let mi = 0; mi < 5; mi++) {
+                            addExplosion(e.x + (Math.random() - 0.5) * 60, e.z + (Math.random() - 0.5) * 60);
+                        }
+                        addParticles(e.x, e.z, 60, 0xff4400, 8, 45);
+                        addParticles(e.x, e.z, 30, 0xffaa00, 6, 35);
+                        addParticles(e.x, e.z, 20, 0xffffff, 5, 25);
+                        g.shakeTimer = 35; g.screenFlash = 0.9;
+                        g.slowMo = 400;
+                        addScorePopup(`🔥 大龙王 +${killScore}!`, ep.x, ep.y - 40, 0xff4400);
+                        // Extra loot — more coins and guaranteed gems
+                        spawnBossCoins(e.x, e.z);
+                        spawnBossCoins(e.x, e.z); // double coins
+                        spawnBossGems(e.x, e.z);
+                        const otherBossAlive = g.enemies.some(o => o !== e && o.alive && o.isBoss);
+                        if (!otherBossAlive) g.enemyBullets = [];
+                    } else if (e.isBoss) {
                         // Boss death: big explosion + extra particles + strong shake
                         addExplosion(e.x + 20, e.z + 15);
                         addExplosion(e.x - 20, e.z - 15);
@@ -242,7 +260,106 @@ function update(dt) {
                     }
                 }
                 // Muzzle flash particles
-                addParticles(e.x, e.z, 4, 0xff4444, 3, 10);
+                addParticles(e.x, e.z, 4, e.isMegaBoss ? 0xff2200 : 0xff4444, 3, 10);
+            }
+
+            // === MEGA BOSS SKILL SYSTEM ===
+            if (e.isMegaBoss) {
+                e.megaSkillTimer++;
+                if (e.megaSkillTimer >= e.megaSkillCooldown) {
+                    e.megaSkillTimer = 0;
+                    const skill = e.megaNextSkill % 3;
+                    e.megaNextSkill++;
+
+                    if (skill === 0) {
+                        // --- FLAME BREATH: fan of fire projectiles ---
+                        const fanCount = 7 + Math.min(e.megaLevel, 5) * 2;
+                        const fanSpread = 0.6 + e.megaLevel * 0.05;
+                        const mobileScale = _proj.isMobile ? 0.9 : 1.0;
+                        const fSpeed = Math.min(4.5, 2.2 + e.megaLevel * 0.3) * mobileScale;
+                        for (let fi = 0; fi < fanCount; fi++) {
+                            const angle = -fanSpread + 2 * fanSpread * fi / (fanCount - 1);
+                            const baseAngle = Math.atan2(playerZ - e.z, g.player.x - e.x);
+                            const finalAngle = baseAngle + angle;
+                            g.enemyBullets.push({
+                                x: e.x, z: e.z,
+                                vx: Math.cos(finalAngle) * fSpeed,
+                                vz: Math.sin(finalAngle) * fSpeed,
+                                damage: Math.max(1, e.damage - 1), life: 200,
+                                type: 'flame', color: 0xff6600,
+                            });
+                        }
+                        addParticles(e.x, e.z, 20, 0xff4400, 5, 20);
+                        addParticles(e.x, e.z, 10, 0xffaa00, 4, 15);
+                        g.shakeTimer = Math.max(g.shakeTimer, 10);
+                        // Warning text
+                        const bp = project(e.x, e.z - g.cameraZ);
+                        addScorePopup('🔥 火焰吐息!', bp.x, bp.y - 40, 0xff4400);
+                    } else if (skill === 1) {
+                        // --- SUMMON MINIONS: spawn a small squad of enemies ---
+                        if (e.megaSummonCount < 3 + e.megaLevel) {
+                            e.megaSummonCount++;
+                            const summonCount = 3 + Math.min(e.megaLevel, 4);
+                            const summonZ = e.z - 30;
+                            const af2 = getAdaptiveFactor();
+                            for (let si = 0; si < summonCount; si++) {
+                                const sx = e.x + (si - (summonCount - 1) / 2) * 40 + (Math.random() - 0.5) * 15;
+                                const rawHp = CONFIG.ENEMY_HP + g.wave * 0.6;
+                                const summonHp = Math.ceil(rawHp * af2 * 0.7 * 1.38);
+                                const summonDmg = Math.max(1, Math.ceil((1 + Math.floor(g.wave / 8)) * 0.8));
+                                g.enemies.push({
+                                    x: sx, z: summonZ + (Math.random() - 0.5) * 20,
+                                    hp: summonHp, maxHp: summonHp, alive: true,
+                                    damage: summonDmg, isHeavy: false,
+                                    animFrame: 0, animTimer: Math.random() * 500, hitFlash: 0,
+                                    type: Math.random() < 0.5 ? 0 : 1,
+                                });
+                            }
+                            // Summon visual
+                            addParticles(e.x, summonZ, 15, 0xcc44ff, 4, 18);
+                            g.shakeTimer = Math.max(g.shakeTimer, 6);
+                            const bp2 = project(e.x, e.z - g.cameraZ);
+                            addScorePopup('👹 召唤小兵!', bp2.x, bp2.y - 40, 0xcc44ff);
+                        } else {
+                            // Max summons reached, do flame breath instead
+                            e.megaSkillTimer = e.megaSkillCooldown - 20; // quick retry with next skill
+                        }
+                    } else if (skill === 2) {
+                        // --- GROUND SLAM: shockwave dealing squad damage ---
+                        const slamDmg = Math.max(1, Math.ceil(e.damage * 0.6));
+                        if (g.weapon !== 'invincibility') {
+                            const squadArmor = Math.min(2, Math.floor(g.squadCount / 15));
+                            const finalDmg = Math.max(1, slamDmg - (playerData.armor || 0) - squadArmor);
+                            g.squadCount = Math.max(0, g.squadCount - finalDmg);
+                            g.gateText = { text: `⚡ 震地冲击 −${finalDmg}!`, color: 0xff2222, timer: 0, maxTimer: 80, scale: 0.1 };
+                            g.gateFlash = { color: 0xff2222, timer: 18, maxTimer: 18 };
+                            if (g.squadCount <= 0) { g.state = 'gameover'; showGameOver(); }
+                        } else {
+                            addParticles(g.player.x, playerZ, 10, 0xffdd44, 3, 12);
+                            g.gateText = { text: '⚡ 震地冲击 (抵挡!)', color: 0xffdd44, timer: 0, maxTimer: 70, scale: 0.1 };
+                        }
+                        // Visual: big shockwave ring from boss
+                        g.explosions.push({ x: e.x, z: e.z, timer: 0, maxTimer: 35, isBlastRing: true });
+                        addParticles(e.x, e.z, 25, 0xff4444, 6, 25);
+                        addParticles(g.player.x, playerZ, 12, 0xff6644, 4, 15);
+                        g.shakeTimer = Math.max(g.shakeTimer, 22);
+                        g.vignetteFlash = Math.min(1.5, 0.9);
+                        g.screenFlash = Math.max(g.screenFlash, 0.4);
+                        // Speed lines for shockwave
+                        const pp = project(g.player.x, 0);
+                        for (let s = 0; s < 20; s++) {
+                            const a = (s / 20) * Math.PI * 2;
+                            const spd = 7 + Math.random() * 7;
+                            g.speedLines.push({
+                                x: pp.x, y: pp.y,
+                                vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+                                life: 10 + Math.random() * 8, maxLife: 18,
+                                length: 20 + Math.random() * 25, color: 0xff4444,
+                            });
+                        }
+                        playSound('explosion');
+                    }
+                }
             }
         } else {
             // === Normal enemy AI ===
@@ -512,8 +629,12 @@ function update(dt) {
         spawnEnemyWave();
         if (Math.random() > 0.3) spawnBarrels();
         g.wave++;
-        // Boss every 5 waves
-        if (g.wave % 5 === 0) spawnBoss(g.nextWaveZ - 80);
+        // Mega boss every 10 waves, regular boss every 5 waves (but not on mega wave)
+        if (g.wave % 10 === 0) {
+            spawnMegaBoss(g.nextWaveZ - 80);
+        } else if (g.wave % 5 === 0) {
+            spawnBoss(g.nextWaveZ - 80);
+        }
         g.waveBanner = { wave: g.wave, timer: 0, maxTimer: CONFIG.WAVE_BANNER_DURATION };
         playSound('wave_start');
     }
